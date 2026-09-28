@@ -1,0 +1,21 @@
+{
+  "_comment": "42.195km 全体の東京エリア定義。実距離の再現ではなく『東京を走った』と感じられる順序を優先。Vertical Slice では 0〜3km のみ使用。",
+  "areas": [
+    { "fromKm": 0.0,  "id": "nishi-shinjuku", "name": "西新宿",     "en": "NISHI-SHINJUKU", "style": "towers", "window": [0.55, 0.75, 1.0],  "facade": [0.10, 0.13, 0.20], "neon": 0.25, "height": [60, 170] },
+    { "fromKm": 1.0,  "id": "shinjuku",       "name": "新宿",       "en": "SHINJUKU",       "style": "neon",   "window": [1.0, 0.75, 0.45],  "facade": [0.16, 0.11, 0.16], "neon": 0.9,  "height": [18, 55] },
+    { "fromKm": 2.1,  "id": "shinjuku-3",     "name": "新宿三丁目", "en": "SHINJUKU 3-CHOME","style": "mixed", "window": [0.9, 0.8, 0.6],    "facade": [0.13, 0.12, 0.16], "neon": 0.6,  "height": [22, 70] },
+    { "fromKm": 3.2,  "id": "ichigaya",       "name": "市ヶ谷",     "en": "ICHIGAYA",       "style": "mixed",  "window": [0.8, 0.85, 1.0],  "facade": [0.12, 0.13, 0.17], "neon": 0.35, "height": [20, 60] },
+    { "fromKm": 5.0,  "id": "iidabashi",      "name": "飯田橋",     "en": "IIDABASHI",      "style": "mixed",  "window": [0.9, 0.8, 0.7],   "facade": [0.13, 0.12, 0.15], "neon": 0.4,  "height": [18, 50] },
+    { "fromKm": 7.0,  "id": "akihabara",      "name": "秋葉原",     "en": "AKIHABARA",      "style": "neon",   "window": [0.6, 1.0, 0.9],   "facade": [0.12, 0.10, 0.18], "neon": 1.0,  "height": [20, 50] },
+    { "fromKm": 10.0, "id": "nihonbashi",     "name": "日本橋",     "en": "NIHONBASHI",     "style": "towers", "window": [1.0, 0.9, 0.7],   "facade": [0.14, 0.13, 0.13], "neon": 0.2,  "height": [30, 120] },
+    { "fromKm": 13.0, "id": "asakusa",        "name": "浅草",       "en": "ASAKUSA",        "style": "old",    "window": [1.0, 0.7, 0.4],   "facade": [0.18, 0.12, 0.10], "neon": 0.5,  "height": [8, 25] },
+    { "fromKm": 17.0, "id": "skytree",        "name": "スカイツリー", "en": "SKYTREE",      "style": "mixed",  "window": [0.7, 0.8, 1.0],   "facade": [0.11, 0.12, 0.18], "neon": 0.4,  "height": [15, 45] },
+    { "fromKm": 21.0, "id": "ueno",           "name": "上野",       "en": "UENO",           "style": "mixed",  "window": [0.9, 0.85, 0.7],  "facade": [0.13, 0.13, 0.14], "neon": 0.45, "height": [15, 45] },
+    { "fromKm": 25.0, "id": "ginza",          "name": "銀座",       "en": "GINZA",          "style": "towers", "window": [1.0, 0.95, 0.8],  "facade": [0.12, 0.12, 0.13], "neon": 0.55, "height": [30, 70] },
+    { "fromKm": 29.0, "id": "roppongi",       "name": "六本木",     "en": "ROPPONGI",       "style": "neon",   "window": [0.8, 0.6, 1.0],   "facade": [0.12, 0.09, 0.18], "neon": 0.85, "height": [30, 140] },
+    { "fromKm": 32.0, "id": "tokyo-tower",    "name": "東京タワー", "en": "TOKYO TOWER",    "style": "mixed",  "window": [1.0, 0.6, 0.4],   "facade": [0.15, 0.10, 0.12], "neon": 0.5,  "height": [20, 60] },
+    { "fromKm": 35.0, "id": "shibuya",        "name": "渋谷",       "en": "SHIBUYA",        "style": "neon",   "window": [0.7, 0.9, 1.0],   "facade": [0.12, 0.10, 0.17], "neon": 1.0,  "height": [25, 90] },
+    { "fromKm": 38.5, "id": "hibiya",         "name": "日比谷",     "en": "HIBIYA",         "style": "towers", "window": [0.95, 0.9, 0.8],  "facade": [0.13, 0.13, 0.14], "neon": 0.3,  "height": [30, 110] },
+    { "fromKm": 40.5, "id": "marunouchi",     "name": "丸の内",     "en": "MARUNOUCHI",     "style": "towers", "window": [1.0, 0.92, 0.8],  "facade": [0.14, 0.13, 0.12], "neon": 0.15, "height": [40, 160] }
+  ]
+}

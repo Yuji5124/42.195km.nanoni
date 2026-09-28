@@ -1,0 +1,243 @@
+import * as THREE from 'three';
+import {
+  makeBannerTexture,
+  makeRoadSignTexture,
+  makeVisionTexture,
+  makeBackdrop2DTexture,
+  makeFinishLineTexture,
+  makeGroundSectionTexture,
+} from './textures.js';
+import { CONFIG } from '../config.js';
+
+// 距離に紐づくランドマーク（スタート/km/ゴールアーチ、都庁、大ガード、巨大ビジョン…）。
+// すべて「z = 0 が設置地点」のローカル座標で組み立て、TokyoChunkManager が配置する。
+
+const steel = new THREE.MeshLambertMaterial({ color: 0x2a2d3a });
+const darkSteel = new THREE.MeshLambertMaterial({ color: 0x15161d });
+
+function glowBasic(tex, boost = 1.4, opts = {}) {
+  const m = new THREE.MeshBasicMaterial({ map: tex, ...opts });
+  m.color.setScalar(boost);
+  return m;
+}
+
+function gantry(width, height, beamH, beamMat) {
+  const g = new THREE.Group();
+  for (const side of [-1, 1]) {
+    const p = new THREE.Mesh(new THREE.BoxGeometry(0.8, height, 0.8), steel);
+    p.position.set(side * (width / 2), height / 2, 0);
+    g.add(p);
+  }
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(width + 0.8, beamH, 0.9), beamMat ?? darkSteel);
+  beam.position.y = height + beamH / 2 - 0.2;
+  g.add(beam);
+  return g;
+}
+
+function bannerPlane(tex, w, h, y, boost) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glowBasic(tex, boost));
+  m.position.set(0, y, 0.47);
+  return m;
+}
+
+const halfRoad = CONFIG.road.halfWidth;
+
+const builders = {
+  startArch() {
+    const g = gantry(halfRoad * 2 + 2.4, 7, 2.6);
+    g.add(bannerPlane(makeBannerTexture(['START', '東京都庁前 ─ 42.195km、なのに。'], { accent: '#ff3d7f' }), 16.5, 2.3, 8.1, 1.5));
+    const line = new THREE.Mesh(
+      new THREE.PlaneGeometry(halfRoad * 2, 0.6),
+      new THREE.MeshBasicMaterial({ color: 0xffffff })
+    );
+    line.rotation.x = -Math.PI / 2;
+    line.position.y = 0.03;
+    g.add(line);
+    return { group: g };
+  },
+
+  kmArch(lm) {
+    const g = gantry(halfRoad * 2 + 1.6, 6.2, 1.8);
+    g.add(bannerPlane(makeBannerTexture([lm.label], { accent: '#ffd23f', fg: '#ffd23f', width: 512, height: 128 }), 7, 1.75, 7.0, 1.6));
+    return { group: g };
+  },
+
+  roadSign(lm) {
+    const g = gantry(halfRoad * 2 + 1.2, 6.6, 0.4);
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(10, 2.5),
+      new THREE.MeshLambertMaterial({ map: makeRoadSignTexture(lm.lines), emissive: 0x0a2a18 })
+    );
+    sign.position.set(0, 8.0, 0.5);
+    g.add(sign);
+    return { group: g };
+  },
+
+  goalArch() {
+    const g = gantry(halfRoad * 2 + 2.4, 7.5, 3.0);
+    g.add(bannerPlane(makeBannerTexture(['FINISH', '仮ゴール ─ VERTICAL SLICE 3.000km'], { accent: '#ffd23f' }), 16.5, 2.7, 8.8, 1.7));
+    const lineMat = new THREE.MeshBasicMaterial({ map: makeFinishLineTexture() });
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(halfRoad * 2, 1.2), lineMat);
+    line.rotation.x = -Math.PI / 2;
+    line.position.y = 0.03;
+    g.add(line);
+    // ゴールテープ
+    const tape = new THREE.Mesh(
+      new THREE.BoxGeometry(halfRoad * 2 + 1.6, 0.08, 0.04),
+      new THREE.MeshBasicMaterial({ color: 0xff2a4a })
+    );
+    tape.position.y = 1.25;
+    tape.name = 'tape';
+    g.add(tape);
+    // 横一列の係員（普通のゴールらしさ）
+    const staffMat = new THREE.MeshLambertMaterial({ color: 0xffd23f });
+    for (let i = 0; i < 6; i++) {
+      const s = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.7, 0.4), staffMat);
+      s.position.set((i < 3 ? -1 : 1) * (halfRoad + 1.3 + (i % 3) * 0.9), 0.85, -6);
+      g.add(s);
+    }
+    return {
+      group: g,
+      breakTape() {
+        tape.visible = false;
+      },
+    };
+  },
+
+  tocho(lm) {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: 0x8c93a8, emissive: 0x141a2a });
+    const lit = new THREE.MeshBasicMaterial({ color: 0xffe6a8 });
+    for (const dz of [-14, 14]) {
+      const t = new THREE.Mesh(new THREE.BoxGeometry(18, 170, 18), mat);
+      t.position.set(0, 85, dz);
+      g.add(t);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(12, 26, 12), mat);
+      top.position.set(0, 183, dz);
+      g.add(top);
+      for (let y = 20; y < 170; y += 9) {
+        const band = new THREE.Mesh(new THREE.BoxGeometry(18.2, 0.8, 18.2), lit);
+        band.position.set(0, y, dz);
+        g.add(band);
+      }
+    }
+    const base = new THREE.Mesh(new THREE.BoxGeometry(22, 60, 48), mat);
+    base.position.set(0, 30, 0);
+    g.add(base);
+    g.position.x = (lm.side ?? -1) * 75;
+    return { group: g };
+  },
+
+  vision(lm) {
+    const g = new THREE.Group();
+    const side = lm.side ?? 1;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(14, 34, 30), new THREE.MeshLambertMaterial({ color: 0x1b1a24 }));
+    b.position.set(side * 19.5, 17, 0);
+    g.add(b);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(26, 13), glowBasic(makeVisionTexture(lm.text ?? '走れば\nなんとかなる。'), 1.3));
+    screen.position.set(side * 12.4, 18, 0);
+    screen.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
+    g.add(screen);
+    return { group: g };
+  },
+
+  overpass(lm) {
+    const g = new THREE.Group();
+    const bridge = new THREE.Mesh(new THREE.BoxGeometry(70, 2.2, 9), darkSteel);
+    bridge.position.y = 7.4;
+    g.add(bridge);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(70.2, 0.5, 9.2), new THREE.MeshBasicMaterial({ color: 0x8a8f99 }));
+    stripe.position.y = 6.6;
+    g.add(stripe);
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(9, 1.6),
+      glowBasic(makeBannerTexture([lm.label ?? '新宿大ガード'], { width: 512, height: 96, accent: '#39e6ff' }), 1.2)
+    );
+    label.position.set(0, 7.4, 4.52);
+    g.add(label);
+    for (const x of [-halfRoad - 2.2, halfRoad + 2.2]) {
+      const pier = new THREE.Mesh(new THREE.BoxGeometry(1.4, 6.4, 7), steel);
+      pier.position.set(x, 3.2, 0);
+      g.add(pier);
+    }
+    // 山手線（ウグイス色）
+    const train = new THREE.Group();
+    const carMat = new THREE.MeshLambertMaterial({ color: 0xc8ccd4 });
+    const green = new THREE.MeshBasicMaterial({ color: 0x7ac943 });
+    const win = new THREE.MeshBasicMaterial({ color: 0xfff1c4 });
+    for (let i = 0; i < 4; i++) {
+      const car = new THREE.Mesh(new THREE.BoxGeometry(19, 3, 3), carMat);
+      car.position.x = i * 20;
+      train.add(car);
+      const band = new THREE.Mesh(new THREE.BoxGeometry(19.05, 0.4, 3.05), green);
+      band.position.set(i * 20, -0.4, 0);
+      train.add(band);
+      const w = new THREE.Mesh(new THREE.BoxGeometry(17, 0.8, 3.08), win);
+      w.position.set(i * 20, 0.6, 0);
+      train.add(w);
+    }
+    train.position.set(-120, 10.1, 0);
+    g.add(train);
+    let tx = -120;
+    return {
+      group: g,
+      update(dt) {
+        tx += dt * 32;
+        if (tx > 90) tx = -170;
+        train.position.x = tx;
+      },
+    };
+  },
+
+  // 横スクロール区間: 遠景のドット絵 + 手前の「地面の断面」（2D 横スクロールの床）
+  backdrop2d() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ map: makeBackdrop2DTexture(), transparent: true, opacity: 0, depthWrite: false, fog: false });
+    // 望遠カメラ（FOV 9.5°、距離 ≒ 250）から全体が見える大きさ
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(92, 30), mat);
+    plane.rotation.y = Math.PI / 2;
+    plane.position.set(-170, 10, 0);
+    plane.renderOrder = -1;
+    g.add(plane);
+
+    const groundMat = new THREE.MeshBasicMaterial({ map: makeGroundSectionTexture(), transparent: true, opacity: 0, fog: false });
+    groundMat.map.repeat.set(40, 4);
+    // near クリップ面（プレイヤー + 3.2）のすぐ奥。地面より下だけを埋める
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(160, 16), groundMat);
+    ground.rotation.y = Math.PI / 2;
+    ground.position.set(CONFIG.road.halfWidth - 0.2, -8, 0);
+    g.add(ground);
+    return {
+      group: g,
+      followsPlayer: true,
+      setOpacity(a) {
+        mat.opacity = a;
+        groundMat.opacity = a;
+        plane.visible = ground.visible = a > 0.01;
+      },
+    };
+  },
+};
+
+export function buildLandmark(lm) {
+  const fn = builders[lm.type];
+  if (!fn) {
+    console.warn('unknown landmark', lm.type);
+    return null;
+  }
+  return fn(lm);
+}
+
+export function disposeObject(obj) {
+  obj.traverse((o) => {
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) {
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m === steel || m === darkSteel) continue;
+        if (m.map) m.map.dispose();
+        m.dispose();
+      }
+    }
+  });
+}

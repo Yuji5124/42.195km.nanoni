@@ -1,0 +1,65 @@
+{
+  "name": "VERTICAL SLICE 0–3km",
+  "goalKm": 3.0,
+  "defaults": {
+    "camera": "NORMAL",
+    "fx": "none",
+    "music": "normal",
+    "crowd": 0.45,
+    "obstacles": 0.0,
+    "cheerMul": 1.0,
+    "rules": {},
+    "pattern": null,
+    "calm": false
+  },
+  "events": [
+    { "km": 0.0,  "id": "start", "camera": "NORMAL", "crowd": 0.5, "obstacles": 0.0 },
+    { "km": 0.18, "id": "obstacles_on", "obstacles": 0.45 },
+    {
+      "km": 0.8, "id": "crowd_surge", "crowd": 1.0,
+      "caption": { "main": "声援が、増えてきた。", "sub": "観客の近くを走ると CHEER が上がる" },
+      "commentary": "沿道の声援が一段と大きくなってきました！"
+    },
+    {
+      "km": 1.2, "id": "tv", "camera": "TV_BROADCAST", "fx": "broadcast", "music": "tv",
+      "cheerMul": 2.0, "obstacles": 0.3,
+      "caption": { "main": "マラソン、なのに。", "sub": "テレビ中継カメラ" },
+      "commentary": "さあ、ここで中継が入りました！ 画面の前の皆さん、見えますか！"
+    },
+    {
+      "km": 1.8, "id": "back_normal", "camera": "NORMAL", "fx": "none", "music": "normal",
+      "cheerMul": 1.0, "obstacles": 0.5,
+      "commentary": "中継車、いったん離れます！"
+    },
+    {
+      "km": 2.2, "id": "side2d", "camera": "SIDE_2D", "fx": "retro", "music": "chip",
+      "obstacles": 0.0, "pattern": "side2d",
+      "rules": { "lane": 4.0, "aiMaxX": 2.4, "screenControls": true },
+      "caption": { "main": "マラソン、なのに。", "sub": "横スクロール" },
+      "hint": "→ 加速　← 減速　SPACE ジャンプ",
+      "commentary": "えっ、カメラが…真横!? これ、マラソン中継ですよね!?"
+    },
+    {
+      "km": 2.7, "id": "return3d", "camera": "NORMAL", "fx": "none", "music": "final",
+      "obstacles": 0.35, "pattern": null, "rules": {},
+      "caption": { "main": "……戻った。", "sub": "ゴールまで 300m" }
+    },
+    {
+      "km": 2.86, "id": "final_straight", "obstacles": 0.0, "crowd": 1.6, "calm": true,
+      "commentary": "最後の直線！ 観客の声援が最高潮です！"
+    },
+    { "km": 3.0, "id": "goal", "goal": true }
+  ],
+  "landmarks": [
+    { "km": 0.0,  "type": "startArch" },
+    { "km": 0.12, "type": "tocho", "side": -1 },
+    { "km": 0.45, "type": "roadSign", "lines": ["新宿", "Shinjuku", "飯田橋", "Iidabashi"] },
+    { "km": 1.0,  "type": "kmArch", "label": "1 km" },
+    { "km": 1.05, "type": "vision", "side": 1, "text": "走れば\nなんとかなる。" },
+    { "km": 1.55, "type": "overpass", "label": "新宿大ガード" },
+    { "km": 1.95, "type": "roadSign", "lines": ["新宿三丁目", "Shinjuku 3", "市ヶ谷", "Ichigaya"] },
+    { "km": 2.0,  "type": "kmArch", "label": "2 km" },
+    { "km": 2.2,  "type": "backdrop2d", "until": 2.7 },
+    { "km": 3.0,  "type": "goalArch" }
+  ]
+}
