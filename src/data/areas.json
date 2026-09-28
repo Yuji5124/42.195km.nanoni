@@ -1,5 +1,5 @@
 {
-  "_comment": "42.195km 全体の東京エリア定義。実距離の再現ではなく『東京を走った』と感じられる順序を優先。Vertical Slice では 0〜5km のみ使用。",
+  "_comment": "42.195km 全体の東京エリア定義。実距離の再現ではなく『東京を走った』と感じられる順序を優先。Vertical Slice では 0〜10km のみ使用。",
   "areas": [
     {
       "fromKm": 0.0,
@@ -112,7 +112,29 @@
       ]
     },
     {
-      "fromKm": 7.0,
+      "fromKm": 5.2,
+      "id": "suidobashi",
+      "name": "水道橋",
+      "en": "SUIDOBASHI",
+      "style": "mixed",
+      "window": [
+        0.85,
+        0.85,
+        1.0
+      ],
+      "facade": [
+        0.12,
+        0.12,
+        0.17
+      ],
+      "neon": 0.45,
+      "height": [
+        18,
+        50
+      ]
+    },
+    {
+      "fromKm": 6.6,
       "id": "akihabara",
       "name": "秋葉原",
       "en": "AKIHABARA",
@@ -134,7 +156,29 @@
       ]
     },
     {
-      "fromKm": 10.0,
+      "fromKm": 8.0,
+      "id": "kanda",
+      "name": "神田",
+      "en": "KANDA",
+      "style": "mixed",
+      "window": [
+        1.0,
+        0.85,
+        0.65
+      ],
+      "facade": [
+        0.14,
+        0.12,
+        0.13
+      ],
+      "neon": 0.5,
+      "height": [
+        16,
+        45
+      ]
+    },
+    {
+      "fromKm": 9.3,
       "id": "nihonbashi",
       "name": "日本橋",
       "en": "NIHONBASHI",

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp } from '../core/math.js';
 import { CONFIG } from '../config.js';
 import { createAnimalInstances, DOG_LOOKS, setAnimalLook } from '../world/AnimalModel.js';
@@ -50,6 +51,47 @@ function buildTrain() {
   return cars;
 }
 
+// 東京ドローン（無灯火の本体 + 光るローター）。頂点色は 1 を超えてよい → ブルームで光る
+function colorBox(w, h, d, [x, y, z], rgb) {
+  const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+  g.translate(x, y, z);
+  g.deleteAttribute('uv');
+  const n = g.attributes.position.count;
+  const c = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) c.set(rgb, i * 3);
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  return g;
+}
+
+function createDroneMesh(count) {
+  const body = [0.14, 0.15, 0.2];
+  const rotor = [1.2, 2.4, 2.8];
+  const parts = [
+    colorBox(0.8, 0.24, 0.8, [0, 0, 0], body),
+    colorBox(1.9, 0.08, 0.12, [0, 0.05, 0], body),
+    colorBox(0.12, 0.08, 1.9, [0, 0.05, 0], body),
+    colorBox(0.22, 0.1, 0.1, [0, 0, 0.42], [2.4, 0.3, 0.3]),
+  ];
+  for (const [x, z] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) {
+    parts.push(colorBox(0.7, 0.04, 0.7, [x, 0.14, z], rotor));
+  }
+  const mesh = new THREE.InstancedMesh(mergeGeometries(parts), new THREE.MeshBasicMaterial({ vertexColors: true }), count);
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.count = 0;
+  return mesh;
+}
+
+function createBulletMesh(count) {
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffe066 });
+  mat.color.multiplyScalar(2.2);
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.16, 0.16, 1.0), mat, count);
+  mesh.frustumCulled = false;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  mesh.count = 0;
+  return mesh;
+}
+
 function buildCar(color) {
   const car = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color });
@@ -90,6 +132,10 @@ export class GagDirector {
     for (const c of this.trainCars) scene.add(c);
     this.cars = [buildCar(0xffc21a), buildCar(0xeeeeee), buildCar(0xd02030), buildCar(0x2050c0)];
     for (const c of this.cars) scene.add(c);
+    this.droneMesh = createDroneMesh(40);
+    this.bulletMesh = createBulletMesh(60);
+    scene.add(this.droneMesh, this.bulletMesh);
+    this.time = 0;
 
     this.reset();
   }
@@ -99,6 +145,9 @@ export class GagDirector {
     this.pacers = { active: false, dogs: [] };
     this.signal = { state: 'off', t: 0, lineS: this.chunks.landmarkS('signal') ?? Infinity, cars: [] };
     this.giant = { state: 'off' };
+    this.shooter = { active: false, ending: false, drones: [], bullets: [], cooldown: 0, spawnS: 0, kills: 0 };
+    this.droneMesh.count = 0;
+    this.bulletMesh.count = 0;
     for (const c of this.trainCars) c.visible = false;
     for (const c of this.cars) c.visible = false;
     for (let i = 0; i < 4; i++) this.path.writeMatrix(this.dogs.instanceMatrix.array, i, 0, 0, 0, 0, 0);
@@ -110,6 +159,8 @@ export class GagDirector {
     else if (name === 'dogPacer') this.startPacers(player);
     else if (name === 'signal') this.signal.state = 'armed';
     else if (name === 'giantDog') this.startGiant(player);
+    else if (name === 'shooterOn') this.shooter = { active: true, ending: false, drones: [], bullets: [], cooldown: 0, spawnS: player.s + 55, kills: 0 };
+    else if (name === 'shooterOff') this.shooter.ending = true;
   }
 
   // ---- ルール・AI への影響
@@ -387,7 +438,96 @@ export class GagDirector {
     }
   }
 
-  update(dt, player) {
+  // ================= 見下ろしシューティング =================
+  // ドローンは前方をゆっくり進みながら左右に揺れる。プレイヤーは追いついて撃つ。ぶつかるとよろける
+  nearestDrone(player, range = 45) {
+    let best = null;
+    for (const d of this.shooter.drones) {
+      const ds = d.s - player.s;
+      if (ds > 0 && ds < range && (!best || ds < best.s - player.s)) best = d;
+    }
+    return best;
+  }
+
+  updateShooter(dt, player, fire) {
+    const sh = this.shooter;
+    if (!sh.active) {
+      this.droneMesh.count = 0;
+      this.bulletMesh.count = 0;
+      return;
+    }
+    const rng = Math.random;
+    if (!sh.ending) {
+      while (sh.spawnS < player.s + 110) {
+        const n = 2 + Math.floor(rng() * 3);
+        for (let k = 0; k < n; k++) {
+          sh.drones.push({ s: sh.spawnS + rng() * 6, x: (rng() * 2 - 1) * 5.4, y: 2.3, vs: 7 + rng() * 3, phase: rng() * 6.28 });
+        }
+        sh.spawnS += 16 + rng() * 10;
+      }
+    }
+    // 射撃
+    sh.cooldown -= dt;
+    if (fire && sh.cooldown <= 0 && !player.falling) {
+      sh.cooldown = 0.16;
+      sh.bullets.push({ s: player.s + 0.8, x: player.x, y: player.y + 1.3, life: 0.5 });
+      this.hooks.sfx('shoot');
+    }
+    for (const b of sh.bullets) {
+      b.s += 55 * dt;
+      b.life -= dt;
+      for (const d of sh.drones) {
+        if (d.dead || Math.abs(d.s - b.s) > 1.8 || Math.abs(d.x - b.x) > 1.6) continue;
+        d.dead = true;
+        b.life = 0;
+        sh.kills++;
+        this.hooks.cheer('droneDown');
+        this.hooks.sfx('explode');
+        this.hooks.burst(d.s, d.x, d.y, [2, 1.2, 0.4]);
+        if (sh.kills === 10 || sh.kills === 25) this.hooks.say(`ドローン ${sh.kills} 機撃墜！ …これ、マラソンですよね!?`);
+        break;
+      }
+    }
+    for (const d of sh.drones) {
+      if (d.dead) continue;
+      d.phase += dt;
+      d.s += d.vs * dt;
+      d.x = clamp(d.x + Math.sin(d.phase * 1.7) * 1.4 * dt, -LIMIT, LIMIT);
+      d.y = sh.ending ? d.y + 7 * dt : 2.3 + Math.sin(d.phase * 3) * 0.2;
+      if (!sh.ending && Math.abs(d.s - player.s) < 1.2 && Math.abs(d.x - player.x) < 1.2 && !player.falling && player.invuln <= 0) {
+        d.dead = true;
+        player.hitStagger(0.35);
+        this.hooks.sfx('explode');
+        this.hooks.burst(d.s, d.x, d.y, [1.5, 0.5, 0.3]);
+        this.hooks.shake(0.3);
+      }
+      if (d.s < player.s - 20 || d.y > 30) d.dead = true;
+    }
+    sh.drones = sh.drones.filter((d) => !d.dead);
+    sh.bullets = sh.bullets.filter((b) => b.life > 0);
+    if (sh.ending && sh.drones.length === 0) sh.active = false;
+
+    const da = this.droneMesh.instanceMatrix.array;
+    const n = Math.min(sh.drones.length, 40);
+    for (let i = 0; i < n; i++) {
+      const d = sh.drones[i];
+      this.path.writeMatrix(da, i, d.s, d.x, d.y, this.time * 1.5 + d.phase, 2.2);
+    }
+    this.droneMesh.count = n;
+    this.droneMesh.instanceMatrix.needsUpdate = true;
+    const ba = this.bulletMesh.instanceMatrix.array;
+    const m = Math.min(sh.bullets.length, 60);
+    for (let i = 0; i < m; i++) {
+      const b = sh.bullets[i];
+      this.path.writeMatrix(ba, i, b.s, b.x, b.y, 0, 1);
+    }
+    this.bulletMesh.count = m;
+    this.bulletMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  update(dt, player, { fire = false } = {}) {
+    this.time += dt;
+    this.updateShooter(dt, player, fire);
     this.updateTrain(dt, player);
     this.updatePacers(dt, player);
     this.updateSignal(dt, player);

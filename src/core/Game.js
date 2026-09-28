@@ -111,6 +111,7 @@ export class Game {
       sfx: (name, arg) => this.audio[sfxMap[name] ?? name]?.(arg),
       shake: (v) => this.cameraDirector.shake(v),
       hype: (v) => this.cheer.hype(v),
+      burst: (s, x, y, color) => this.burstAt({ s, x, y }, color, 26),
     });
 
     this.ui.setSliceGoal(slice.goalKm, CONFIG.fullMarathonKm);
@@ -341,7 +342,11 @@ export class Game {
       }
     });
     bus.on('hazardHit', ({ effect }) => {
-      if (effect === 'cat') {
+      if (effect === 'carCrash') {
+        player.fall('car');
+        audio.carHorn();
+        this.say('車にぶつかった！ …マラソンです！ 大丈夫、立ち上がります！', true);
+      } else if (effect === 'cat') {
         player.hitStagger(0.3);
         audio.meow();
         cam.shake(0.2);
@@ -351,6 +356,11 @@ export class Game {
         cam.shake(0.3);
       } else if (effect === 'fall') player.fall('crash');
       else if (effect === 'slip') player.fall('banana');
+    });
+    bus.on('carPass', ({ dx }) => {
+      if (dx < 0.9) cheer.add('carPass', { scale: 1.6, label: 'CLOSE OVERTAKE' });
+      else cheer.add('carPass');
+      audio.overtake(dx < 0.9);
     });
     bus.on('hazardClear', ({ type, perfect }) => {
       if (type === 'cat') {
@@ -500,6 +510,12 @@ export class Game {
       out.axisX = 1;
       out.axisY = 0;
     }
+    // シューティング: 一番近いドローンの正面に回り込む
+    if (rules.shooter) {
+      const d = this.gags.nearestDrone(p);
+      if (d && Math.abs(d.x - p.x) > 0.35) out.axisX = d.x > p.x ? 1 : -1;
+      return out;
+    }
     // 赤信号では止まる（行儀のいい自動操縦）
     const stop = this.gags.stopLine;
     if (stop.active && p.s < stop.s && stop.s - p.s < 24) {
@@ -509,8 +525,8 @@ export class Game {
     const hz = this.course.hazardAhead(p.s, p.x, 14);
     if (hz) {
       const t = (hz.s - p.s) / Math.max(1, p.speed);
-      if (t < 0.3 && t > 0.08) out.jump = true;
-      else if (!rules.screenControls && typeof rules.lane !== 'number' && t > 0.3) out.axisX = hz.x > p.x ? -1 : 1;
+      if (hz.jumpable && t < 0.3 && t > 0.08) out.jump = true;
+      else if (!rules.screenControls && typeof rules.lane !== 'number' && (t > 0.3 || !hz.jumpable)) out.axisX = hz.x > p.x ? -1 : 1;
     }
     if (!rules.screenControls && !out.axisX) {
       const ai = this.ai;
@@ -585,7 +601,9 @@ export class Game {
       excitement: cheer.excitement,
       stopLine: this.gags.stopLine,
     });
-    if (playing) this.gags.update(dt, player);
+    // シューティング中の射撃（SPACE / JUMP 長押しで連射）
+    const fire = running && !!rules.shooter && (this.autopilot ? true : this.input.held('jump'));
+    if (playing) this.gags.update(dt, player, { fire });
     race.update(dt);
 
     // 声援の条件
@@ -604,7 +622,7 @@ export class Game {
     this.crowd.update(player.s, dt, cheer.excitement);
     this.cameraDirector.update(dt, { player, time: this.time });
     const camMode = this.cameraDirector.mode;
-    this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D);
+    this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D || camMode === MODES.TOP_DOWN);
     this.path.toWorld(player.s, player.x, player.y + 2.7 + Math.sin(this.time * 6) * 0.1, this.marker.position);
     // カメラとプレイヤーの間にいる AI ランナーは透かす（主役が群衆に埋もれないように）
     const cp = this.camera.position;

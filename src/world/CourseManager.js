@@ -65,7 +65,21 @@ function buildGeometries() {
     box(0.3, 0.14, 0.2, 0, 0.14, 0.2, 0x1db7ff),
   ]);
   const token = colored(new THREE.OctahedronGeometry(0.34, 0), 0xffffff);
-  return { cone, barrier, banana, hurdle, crate, onigiri, shoe, token };
+  // 車（塗装色はインスタンスカラーで掛ける → 車体は白の頂点色）
+  const car = mergeGeometries([
+    box(1.8, 0.75, 4.3, 0, 0.7, 0, 0xffffff),
+    box(1.6, 0.62, 2.2, 0, 1.38, 0.2, 0x26324a),
+    box(1.5, 0.12, 2.0, 0, 1.72, 0.2, 0xffffff),
+    box(0.26, 0.6, 0.62, -0.85, 0.3, -1.4, 0x111111),
+    box(0.26, 0.6, 0.62, 0.85, 0.3, -1.4, 0x111111),
+    box(0.26, 0.6, 0.62, -0.85, 0.3, 1.4, 0x111111),
+    box(0.26, 0.6, 0.62, 0.85, 0.3, 1.4, 0x111111),
+    box(0.4, 0.2, 0.05, -0.6, 0.85, -2.16, 0xfff6d8),
+    box(0.4, 0.2, 0.05, 0.6, 0.85, -2.16, 0xfff6d8),
+    box(0.4, 0.18, 0.05, -0.6, 0.85, 2.16, 0xff2020),
+    box(0.4, 0.18, 0.05, 0.6, 0.85, 2.16, 0xff2020),
+  ]);
+  return { cone, barrier, banana, hurdle, crate, onigiri, shoe, token, car };
 }
 
 // kind: hazard（当たると影響）/ pickup（取ると得）
@@ -80,7 +94,11 @@ const TYPES = {
   token: { kind: 'pickup', h: 0, halfW: 0.55, effect: 'cheer', cap: 80, y: 1.6 },
   // 横切る猫（近づくと歩道から飛び出す）。ジャンプで飛び越えられる
   cat: { kind: 'hazard', h: 0.8, halfW: 0.6, jumpable: true, effect: 'cat', cap: 90, animal: true },
+  // レース区間の車: コースを同じ向きにゆっくり走る。飛び越えられない
+  car: { kind: 'hazard', h: 2.0, halfW: 1.0, halfLen: 2.2, jumpable: false, effect: 'carCrash', cap: 24, car: true },
 };
+
+const CAR_PAINT = [0xffc21a, 0xeeeeee, 0xd02030, 0x2050c0, 0x30a060, 0x222228].map((c) => new THREE.Color(c));
 
 const CAT_SCALE = 2.0;
 
@@ -114,7 +132,9 @@ export class CourseManager {
       } else {
         mat = new THREE.MeshLambertMaterial({ vertexColors: true });
       }
+      if (def.car) mat.emissive = new THREE.Color(0x181818);
       const mesh = new THREE.InstancedMesh(geos[type], mat, def.cap);
+      if (def.car) mesh.setColorAt(0, CAR_PAINT[0]);
       mesh.frustumCulled = false;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.count = 0;
@@ -199,6 +219,17 @@ export class CourseManager {
     return this.rng.range(4, 7);
   }
 
+  // 3 車線に 1〜2 台。プレイヤーより遅いので追い抜いていく
+  spawnTraffic(s) {
+    const rng = this.rng;
+    const lanes = [-4.6, 0, 4.6].sort(() => rng.next() - 0.5);
+    const n = rng.chance(0.45) ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      this.add('car', s + rng.range(0, 5), lanes[k] + rng.range(-0.4, 0.4), { vs: rng.range(8, 12.5), paint: rng.int(0, CAR_PAINT.length - 1) });
+    }
+    return rng.range(20, 32);
+  }
+
   spawnNormal(s, density, cats = 0) {
     const rng = this.rng;
     if (cats > 0 && rng.chance(cats)) {
@@ -241,6 +272,10 @@ export class CourseManager {
         this.nextS += this.spawnSide2D(this.nextS, lane);
         continue;
       }
+      if (pattern === 'traffic') {
+        this.nextS += this.spawnTraffic(this.nextS);
+        continue;
+      }
       if (pattern === 'catStampede') {
         this.nextS += this.spawnCatWave(this.nextS);
         continue;
@@ -256,6 +291,7 @@ export class CourseManager {
     // 後方の破棄 + 吹き飛びアニメ
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
+      if (it.vs && !it.knock) it.s += it.vs * dt;
       if (it.type === 'cat' && !it.knock) {
         if (!it.started && player.s > it.s - it.trigger) it.started = true;
         if (it.started) it.x += it.vx * dt;
@@ -296,9 +332,14 @@ export class CourseManager {
         continue;
       }
       // 障害物
-      if (Math.abs(ds) < 0.55 && dx < def.halfW + 0.28 && player.y < def.h - 0.05 && !player.falling && player.invuln <= 0) {
+      const halfLen = def.halfLen ?? 0.25;
+      if (Math.abs(ds) < halfLen + 0.3 && dx < def.halfW + 0.28 && player.y < def.h - 0.05 && !player.falling && player.invuln <= 0) {
         it.resolved = true;
         it.hit = true;
+        if (def.car) {
+          this.bus.emit('hazardHit', { type: it.type, effect: def.effect, item: it });
+          continue;
+        }
         it.knock = {
           t: 0,
           vx: (it.x - player.x >= 0 ? 1 : -1) * 3 + (Math.random() - 0.5) * 2,
@@ -309,9 +350,11 @@ export class CourseManager {
         this.bus.emit('hazardHit', { type: it.type, effect: def.effect, item: it });
         continue;
       }
-      if (ds < -0.8) {
+      if (ds < -(halfLen + 0.55)) {
         it.resolved = true;
-        if (dx < def.halfW + 0.28 && player.y >= def.h - 0.05) {
+        if (def.car) {
+          if (!player.falling) this.bus.emit('carPass', { dx: dx - def.halfW });
+        } else if (dx < def.halfW + 0.28 && player.y >= def.h - 0.05) {
           const clearance = player.y - def.h;
           this.bus.emit('hazardClear', { type: it.type, clearance, perfect: clearance < 0.35 });
         } else if (dx < def.halfW + 0.95 && !player.falling) {
@@ -363,6 +406,7 @@ export class CourseManager {
         pitch = it.spin;
         yaw = it.spin * 0.6;
       }
+      if (it.def.car) mesh.setColorAt(i, CAR_PAINT[it.paint]);
       if (it.def.animal) {
         // 進む向きを向いて、走っている間だけ脚を動かす
         scale = CAT_SCALE;
@@ -380,6 +424,7 @@ export class CourseManager {
       mesh.count = Math.min(counts[type], TYPES[type].cap);
       mesh.instanceMatrix.needsUpdate = true;
       if (TYPES[type].animal) mesh.geometry.attributes.iAnim.needsUpdate = true;
+      if (TYPES[type].car && mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }
 }

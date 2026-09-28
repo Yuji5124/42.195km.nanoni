@@ -124,6 +124,24 @@ export class CameraDirector {
         out.fogFar = D + 420;
         break;
       }
+      case MODES.TOP_DOWN: {
+        // 見下ろしシューティング: 道路の真上から少しだけ前を向く
+        W(p.s - 3, p.x * 0.5, 38, out.pos);
+        W(p.s + 11, p.x * 0.5, 0, out.look);
+        out.fov = 48;
+        out.fogNear = 90;
+        out.fogFar = 500;
+        break;
+      }
+      case MODES.RACING: {
+        // レースゲーム: 地面すれすれ・広角・カーブで大きく傾く
+        const speedN = clamp((p.speed - 12) / 12, 0, 1);
+        W(p.s - 3.6, this.followX * 0.92, 1.35 + this.followY * 0.6, out.pos);
+        W(p.s + 22, this.followX, 0.9 + this.followY * 0.4, out.look);
+        out.fov = 74 + speedN * 14;
+        out.roll = this.lean * 2.4;
+        break;
+      }
       case MODES.GOAL: {
         // ゴール正面から迎えるカメラ。ゴール後はプレイヤーの前を後退しながら映し続ける
         W(Math.max(this.goalS + 11, p.s + 7.5), 2.8 + Math.sin(t * 0.6) * 1.5, 1.8, out.pos);

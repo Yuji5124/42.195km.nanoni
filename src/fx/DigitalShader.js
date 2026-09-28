@@ -16,6 +16,7 @@ export const DigitalShader = {
     uPosterize: { value: 0 },
     uSpeed: { value: 0 },
     uFlash: { value: 0 },
+    uMirror: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -27,11 +28,13 @@ export const DigitalShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec2 uRes;
-    uniform float uTime, uAberr, uScan, uPixel, uGlitch, uNoise, uVignette, uPosterize, uSpeed, uFlash;
+    uniform float uTime, uAberr, uScan, uPixel, uGlitch, uNoise, uVignette, uPosterize, uSpeed, uFlash, uMirror;
     varying vec2 vUv;
     float h21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec2 uv = vUv;
+      // ミラーモード: 3D 画面だけ左右反転（HUD は DOM なのでそのまま）
+      if (uMirror > 0.5) uv.x = 1.0 - uv.x;
       if (uPixel > 1.5) {
         vec2 px = uRes / uPixel;
         uv = (floor(uv * px) + 0.5) / px;
@@ -70,10 +73,14 @@ export const DigitalShader = {
 };
 
 export const FX_PRESETS = {
-  none: { aberr: 0.0012, scan: 0, pixel: 0, noise: 0.018, vignette: 0.45, posterize: 0, bloom: 0.55 },
-  broadcast: { aberr: 0.0022, scan: 0.22, pixel: 0, noise: 0.05, vignette: 0.62, posterize: 0, bloom: 0.5 },
-  retro: { aberr: 0, scan: 0.14, pixel: 4, noise: 0, vignette: 0.3, posterize: 14, bloom: 0.35 },
+  none: { aberr: 0.0012, scan: 0, pixel: 0, noise: 0.018, vignette: 0.45, posterize: 0, bloom: 0.55, mirror: 0, speed: 0 },
+  broadcast: { aberr: 0.0022, scan: 0.22, pixel: 0, noise: 0.05, vignette: 0.62, posterize: 0, bloom: 0.5, mirror: 0, speed: 0 },
+  retro: { aberr: 0, scan: 0.14, pixel: 4, noise: 0, vignette: 0.3, posterize: 14, bloom: 0.35, mirror: 0, speed: 0 },
   // 「東京、読み込み中」: 色ずれとノイズ強め
-  glitch: { aberr: 0.006, scan: 0.3, pixel: 0, noise: 0.08, vignette: 0.5, posterize: 0, bloom: 0.75 },
-  goal: { aberr: 0.001, scan: 0, pixel: 0, noise: 0.01, vignette: 0.35, posterize: 0, bloom: 0.8 },
+  glitch: { aberr: 0.006, scan: 0.3, pixel: 0, noise: 0.08, vignette: 0.5, posterize: 0, bloom: 0.75, mirror: 0, speed: 0 },
+  // 秋葉原: 世界が鏡写し
+  mirror: { aberr: 0.002, scan: 0, pixel: 0, noise: 0.02, vignette: 0.5, posterize: 0, bloom: 0.65, mirror: 1, speed: 0 },
+  // レースゲーム: 常にスピード線、色ずれ強め
+  race: { aberr: 0.004, scan: 0, pixel: 0, noise: 0.03, vignette: 0.62, posterize: 0, bloom: 0.7, mirror: 0, speed: 0.55 },
+  goal: { aberr: 0.001, scan: 0, pixel: 0, noise: 0.01, vignette: 0.35, posterize: 0, bloom: 0.8, mirror: 0, speed: 0 },
 };

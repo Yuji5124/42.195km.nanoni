@@ -73,9 +73,9 @@ const builders = {
     return { group: g };
   },
 
-  goalArch() {
+  goalArch(lm) {
     const g = gantry(halfRoad * 2 + 2.4, 7.5, 3.0);
-    g.add(bannerPlane(makeBannerTexture(['FINISH', '仮ゴール ─ 飯田橋 5.000km'], { accent: '#ffd23f' }), 16.5, 2.7, 8.8, 1.7));
+    g.add(bannerPlane(makeBannerTexture(['FINISH', lm.label ?? '仮ゴール'], { accent: '#ffd23f' }), 16.5, 2.7, 8.8, 1.7));
     const lineMat = new THREE.MeshBasicMaterial({ map: makeFinishLineTexture() });
     const line = new THREE.Mesh(new THREE.PlaneGeometry(halfRoad * 2, 1.2), lineMat);
     line.rotation.x = -Math.PI / 2;
@@ -151,6 +151,27 @@ const builders = {
     };
   },
 
+  // 東京ドーム（水道橋）: 白い屋根の低いドーム
+  dome(lm) {
+    const g = new THREE.Group();
+    const side = lm.side ?? 1;
+    const roof = new THREE.Mesh(
+      new THREE.SphereGeometry(40, 28, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+      new THREE.MeshLambertMaterial({ color: 0xe8ecf4, emissive: 0x2a3348 })
+    );
+    roof.scale.set(1, 0.32, 1);
+    roof.position.set(side * 70, 9, 0);
+    g.add(roof);
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(40, 40, 9, 28, 1, true), new THREE.MeshLambertMaterial({ color: 0x8a90a0, side: THREE.DoubleSide }));
+    wall.position.set(side * 70, 4.5, 0);
+    g.add(wall);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(40.2, 0.4, 6, 40), new THREE.MeshBasicMaterial({ color: 0x39e6ff }));
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(side * 70, 9, 0);
+    g.add(ring);
+    return { group: g };
+  },
+
   // 交差点の信号（停止線 = z 0）。GagDirector が setLight で点灯を切り替える
   signal() {
     const g = new THREE.Group();
@@ -213,6 +234,7 @@ const builders = {
       pier.position.set(x, 3.2, 0);
       g.add(pier);
     }
+    if (lm.highway) return overpassHighway(g);
     // 山手線（ウグイス色）
     const train = new THREE.Group();
     const carMat = new THREE.MeshLambertMaterial({ color: 0xc8ccd4 });
@@ -271,6 +293,28 @@ const builders = {
     };
   },
 };
+
+// 日本橋の上を走る首都高: 高架の上を車が流れる
+function overpassHighway(g) {
+  const colors = [0xffc21a, 0xeeeeee, 0xd02030, 0x2050c0, 0x30a060];
+  const cars = [];
+  for (let i = 0; i < 8; i++) {
+    const car = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 1.8), new THREE.MeshLambertMaterial({ color: colors[i % colors.length], emissive: 0x111111 }));
+    car.position.set(-70 + i * 18, 9.2, i % 2 ? 2 : -2);
+    g.add(car);
+    cars.push({ mesh: car, dir: i % 2 ? -1 : 1 });
+  }
+  return {
+    group: g,
+    update(dt) {
+      for (const c of cars) {
+        c.mesh.position.x += c.dir * 22 * dt;
+        if (c.mesh.position.x > 75) c.mesh.position.x = -75;
+        if (c.mesh.position.x < -75) c.mesh.position.x = 75;
+      }
+    },
+  };
+}
 
 export function buildLandmark(lm) {
   const fn = builders[lm.type];

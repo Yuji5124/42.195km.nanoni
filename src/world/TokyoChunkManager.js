@@ -168,6 +168,10 @@ export class TokyoChunkManager {
     this.backdropRanges = range('backdrop2d', 40);
     this.moatRanges = range('moat');
     // 信号のある交差点は、横切る道路のためにビルを建てない
+    // 東京ドームの側は奥のビルを建てない
+    this.domeRanges = slice.landmarks
+      .filter((l) => l.type === 'dome')
+      .map((l) => ({ side: l.side ?? 1, a: distance.kmToUnits(l.km) - 50, b: distance.kmToUnits(l.km) + 50 }));
     this.gapRanges = slice.landmarks
       .filter((l) => l.type === 'signal')
       .map((l) => [distance.kmToUnits(l.km) - 6, distance.kmToUnits(l.km) + 20]);
@@ -519,6 +523,7 @@ export class TokyoChunkManager {
         const x = side * rng.range(52, 84);
         const h = rng.range(hMax * 0.8, hMax * 1.6);
         if (side < 0 && this.inBackdropRange(sCenter)) continue;
+        if (this.domeRanges.some((r) => r.side === side && sCenter > r.a && sCenter < r.b)) continue;
         putBuilding(x, sCenter, w, h, w, rng.chance(0.3));
       }
     }

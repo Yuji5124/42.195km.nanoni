@@ -30,6 +30,8 @@ const ACTIONS = {
   trainBeat: { base: 400, label: '電車に勝った!' },
   leapCar: { base: 150, label: 'CAR JUMP!?' },
   giantDog: { base: 60, label: 'デカ柴!!' },
+  droneDown: { base: 18, label: 'DRONE DOWN' },
+  carPass: { base: 25, label: 'CAR OVERTAKE' },
 };
 
 export class CheerSystem {

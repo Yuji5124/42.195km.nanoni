@@ -60,7 +60,9 @@ export class EffectManager {
   }
 
   setPreset(name) {
-    this.target = { ...(FX_PRESETS[name] ?? FX_PRESETS.none) };
+    const next = { ...(FX_PRESETS[name] ?? FX_PRESETS.none) };
+    if (next.mirror !== this.target.mirror) this.glitchBurst(1);
+    this.target = next;
   }
 
   glitchBurst(amount = 1) {
@@ -126,7 +128,7 @@ export class EffectManager {
     const p = ctx.player;
 
     for (const k of Object.keys(this.current)) {
-      this.current[k] = damp(this.current[k], this.target[k], k === 'pixel' ? 6 : 3, dt);
+      this.current[k] = k === 'mirror' ? this.target[k] : damp(this.current[k], this.target[k], k === 'pixel' ? 6 : 3, dt);
     }
     this.glitch = Math.max(0, this.glitch - dt * 1.8);
     this.flashAmt = Math.max(0, this.flashAmt - dt * 2.5);
@@ -143,9 +145,10 @@ export class EffectManager {
     u.uPosterize.value = this.current.posterize < 2 ? 0 : this.current.posterize;
     u.uGlitch.value = this.glitch;
     u.uFlash.value = this.flashAmt;
+    u.uMirror.value = this.current.mirror;
     const speedTarget = p.dashing || p.boostTimer > 0 ? 1 : 0;
     this.speedFx = damp(this.speedFx ?? 0, speedTarget, 5, dt);
-    u.uSpeed.value = this.speedFx * (this.current.pixel > 1.5 ? 0 : 1);
+    u.uSpeed.value = Math.max(this.speedFx, this.current.speed) * (this.current.pixel > 1.5 ? 0 : 1);
     this.bloom.strength = this.current.bloom + (ctx.excitement ?? 0) * 0.25;
 
     // パーティクルの見かけサイズ（望遠でも正しく）

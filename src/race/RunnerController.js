@@ -109,7 +109,8 @@ export class RunnerController {
     const ax = control ? (ctx.autopilot?.axisX ?? input.axisX) : 0;
     const ay = control ? (ctx.autopilot?.axisY ?? input.axisY) : 0;
     const dashHeld = control && (ctx.autopilot?.dash ?? input.held('dash'));
-    const jumpPressed = control && (ctx.autopilot?.jump ?? (input.pressed('jump') || (screen && input.pressed('up'))));
+    // シューティング中は SPACE = 射撃（ジャンプしない）
+    const jumpPressed = control && !rules.shooter && (ctx.autopilot?.jump ?? (input.pressed('jump') || (screen && input.pressed('up'))));
     const jumpHeld = ctx.autopilot ? true : input.held('jump') || (screen && input.held('up'));
 
     // ---- 速度

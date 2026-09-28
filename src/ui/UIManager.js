@@ -168,7 +168,7 @@ export class UIManager {
   }
 
   showResult(stats) {
-    const rank = stats.cheer >= 17000 ? 'S' : stats.cheer >= 11000 ? 'A' : stats.cheer >= 6500 ? 'B' : 'C';
+    const rank = stats.cheer >= 32000 ? 'S' : stats.cheer >= 22000 ? 'A' : stats.cheer >= 13000 ? 'B' : 'C';
     const titles = {
       S: '新宿を揺らした主役',
       A: '沿道のアイドル',

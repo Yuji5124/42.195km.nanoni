@@ -30,6 +30,12 @@ const STYLES = {
     lead: [24, null, 27, null, 29, null, 31, 29, 27, null, 24, null, 27, 29, 27, null],
     kick: [0, 8], snare: [4, 12], hat: [2, 6, 10, 14], hatVol: 0.04, chipDrums: true,
   },
+  race: {
+    bpm: 176, wave: 'sawtooth', cutoff: 1000, bassVol: 0.14, leadWave: 'square', leadVol: 0.035,
+    bass: [0, 0, 12, 0, 0, 0, 12, 0, 5, 5, 17, 5, 7, 7, 19, 7],
+    lead: [24, null, 24, 27, null, 29, null, 31, 29, null, 27, null, 24, null, 22, null],
+    kick: [0, 4, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14, 1, 5, 9, 13], hatVol: 0.022,
+  },
   final: {
     bpm: 164, wave: 'sawtooth', cutoff: 1100, bassVol: 0.14, leadWave: 'sawtooth', leadVol: 0.04,
     bass: [0, 0, 12, 0, 3, 3, 15, 3, 5, 5, 17, 5, 7, 7, 19, 7],
@@ -255,6 +261,13 @@ export class AudioManager {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     [350, 440].forEach((f) => this.tone(f, 0.4, { type: 'square', vol: 0.05, at: t, cutoff: 1400 }));
+  }
+  shoot() {
+    this.tone(1100, 0.06, { type: 'square', slideTo: 520, vol: 0.025, cutoff: 3000 });
+  }
+  explode() {
+    this.noiseHit(0.35, { type: 'lowpass', freq: 1400, sweepTo: 180, vol: 0.16 });
+    this.tone(95, 0.3, { type: 'sine', slideTo: 40, vol: 0.14 });
   }
   signalChime() {
     if (!this.ctx) return;
