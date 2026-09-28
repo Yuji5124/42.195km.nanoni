@@ -265,6 +265,9 @@ body {
   margin-left: 8px;
   color: #fff;
 }
+.popup.minus {
+  color: #ff5a5a;
+}
 .popup.big {
   font-size: 34px;
   color: var(--yellow);
@@ -628,6 +631,12 @@ kbd {
 }
 .touch button.active {
   background: rgba(57, 230, 255, 0.45);
+}
+.touch .brake {
+  width: 54px;
+  height: 54px;
+  align-self: flex-end;
+  font-size: 14px;
 }
 .touch .jump {
   width: 88px;

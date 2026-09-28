@@ -18,8 +18,9 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 
 export class RunnerController {
-  constructor(scene, bus) {
+  constructor(scene, bus, path) {
     this.bus = bus;
+    this.path = path;
     this.material = createHumanMaterial({ mode: 'runner', rim: 0.9, rimColor: 0x39e6ff });
     this.mesh = createHumanInstances(1, this.material);
     applyLook(this.mesh, 0, LOOKS.samurai);
@@ -33,6 +34,8 @@ export class RunnerController {
     scene.add(this.headband);
 
     this.position = new THREE.Vector3();
+    this.heading = 0;
+    this.drift = 0;
     this.reset(0, 0);
   }
 
@@ -120,6 +123,8 @@ export class RunnerController {
       if (this.dashing) target = P.dash;
       if (this.boostTimer > 0) target = Math.max(target, P.boost);
       target += ctx.cheerBonus ?? 0;
+      // 赤信号など: ↓ で完全に止まれる
+      if (rules.brake && pace < 0) target = 0;
     }
     if (this.falling) target = 0;
     const accel = this.dashing || this.boostTimer > 0 ? P.dashAccel : P.accel;
@@ -148,7 +153,10 @@ export class RunnerController {
       targetVx = ax * P.lateralSpeed * (this.grounded ? 1 : 0.7);
     }
     this.vx = damp(this.vx, targetVx, 14, dt);
-    this.x = clamp(this.x + this.vx * dt, -LIMIT, LIMIT);
+    // カーブでは外側へふくらむ（速いほど強い）→ 曲がりに合わせて内側へ操作する
+    const drift = typeof rules.lane === 'number' ? 0 : this.path.kappa(this.s) * this.speed * this.speed * 0.45;
+    this.drift = drift;
+    this.x = clamp(this.x + (this.vx + drift) * dt, -LIMIT, LIMIT);
 
     // ---- ジャンプ（先行入力 + コヨーテタイム、長押しで高く）
     this.jumpBuffer = jumpPressed ? 0.14 : Math.max(0, this.jumpBuffer - dt);
@@ -207,7 +215,8 @@ export class RunnerController {
 
   updateVisual(dt) {
     this.yaw = damp(this.yaw, -this.vx * 0.045, 10, dt);
-    const z = -this.s;
+    const f = this.path.sample(this.s);
+    this.heading = f.theta;
     const anim = this.mesh.geometry.attributes.iAnim;
     let pitch = 0;
     let roll = 0;
@@ -226,11 +235,11 @@ export class RunnerController {
     }
     anim.needsUpdate = true;
 
-    _e.set(pitch, this.yaw, roll, 'YXZ');
+    _e.set(pitch, f.theta + this.yaw, roll, 'YXZ');
     _q.setFromEuler(_e);
     const visible = this.invuln <= 0 || Math.floor(this.invuln * 14) % 2 === 0;
     _s.setScalar(visible ? 1 : 0.0001);
-    _m.compose(_p.set(this.x, lift, z), _q, _s);
+    _m.compose(_p.set(f.x + f.cos * this.x, lift, f.z - f.sin * this.x), _q, _s);
     this.mesh.setMatrixAt(0, _m);
     this.mesh.instanceMatrix.needsUpdate = true;
 
@@ -240,10 +249,10 @@ export class RunnerController {
     const lean = 0.12 * amp;
     const bob = Math.abs(Math.cos(this.phase)) * 0.07 * amp;
     const headY = 1.7 + bob;
-    this.headband.position.set(this.x, lift + headY * Math.cos(lean), z - headY * Math.sin(lean));
-    this.headband.rotation.set(-lean, this.yaw, 0);
+    this.path.toWorld(this.s + headY * Math.sin(lean), this.x, lift + headY * Math.cos(lean), this.headband.position);
+    this.headband.rotation.set(-lean, this.heading + this.yaw, 0, 'YXZ');
 
-    this.position.set(this.x, this.y, z);
+    this.path.toWorld(this.s, this.x, this.y, this.position);
     this.material.userData.uniforms.uRim.value = 0.6 + (this.dashing ? 0.8 : 0) + (this.boostTimer > 0 ? 0.6 : 0);
   }
 

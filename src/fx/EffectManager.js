@@ -28,8 +28,9 @@ const _v = new THREE.Vector3();
 const _size = new THREE.Vector2();
 
 export class EffectManager {
-  constructor(renderer, scene, camera) {
+  constructor(renderer, scene, camera, path) {
     this.renderer = renderer;
+    this.path = path;
     this.scene = scene;
     this.camera = camera;
     this.quality = 2;
@@ -89,11 +90,14 @@ export class EffectManager {
 
   // ---- エミッター
   dashSparks(p) {
-    this.sparks.emit({ x: p.x, y: 0.15, z: -p.s + 0.3, vz: 4, vy: 1.5, spread: 1.2, color: [0.3, 0.95, 1.4], size: 0.18, life: 0.35, gravity: 6, count: 2 });
+    this.path.toWorld(p.s - 0.3, p.x, 0.15, _v);
+    const f = this.path.sample(p.s);
+    this.sparks.emit({ x: _v.x, y: _v.y, z: _v.z, vx: f.sin * 4, vz: f.cos * 4, vy: 1.5, spread: 1.2, color: [0.3, 0.95, 1.4], size: 0.18, life: 0.35, gravity: 6, count: 2 });
   }
 
   dust(p) {
-    this.sparks.emit({ x: p.x, y: 0.1, z: -p.s, vy: 1, spread: 1.8, color: [0.5, 0.5, 0.6], size: 0.35, life: 0.45, gravity: 1, count: 12 });
+    this.path.toWorld(p.s, p.x, 0.1, _v);
+    this.sparks.emit({ x: _v.x, y: _v.y, z: _v.z, vy: 1, spread: 1.8, color: [0.5, 0.5, 0.6], size: 0.35, life: 0.45, gravity: 1, count: 12 });
   }
 
   burst(x, y, z, color = [1.4, 1.2, 0.4], count = 24) {
@@ -104,9 +108,8 @@ export class EffectManager {
     this.confetti.emit({
       x: center.x,
       y: center.y + 7,
-      z: center.z - 6,
+      z: center.z,
       vy: 2,
-      vz: 4,
       spread,
       color: CONFETTI,
       size: 0.32,
@@ -156,7 +159,7 @@ export class EffectManager {
     this.confetti.update(dt, this.time);
 
     const tier = ctx.tier ?? 0;
-    _v.set(p.x, p.y + 1.05, -p.s + 0.25);
+    this.path.toWorld(p.s - 0.25, p.x, p.y + 1.05, _v);
     const intensity = ctx.playing ? 0.18 + tier * 0.05 + this.speedFx * 0.55 : 0;
     this.trail.update(dt, _v, this.camera, 0.16 + this.speedFx * 0.12, intensity, TIER_COLORS[tier]);
 

@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { createRng, hashInt, clamp } from '../core/math.js';
-import { createHumanMaterial, createHumanInstances, applyLook, randomSpectatorLook, writeYawMatrix } from './RunnerModel.js';
+import { createHumanMaterial, createHumanInstances, applyLook, randomSpectatorLook } from './RunnerModel.js';
+
+const _v = new THREE.Vector3();
 
 // 沿道の観客。リングバッファで「後方に流れた観客を前方へ再配置」する。
 // 盛り上がり（excitement）はシェーダーの uniform だけで全員に反映 → CPU コストほぼゼロ。
@@ -42,9 +44,10 @@ void main() {
 `;
 
 export class CrowdManager {
-  constructor(scene, distance, events) {
+  constructor(scene, distance, events, path) {
     this.scene = scene;
     this.distance = distance;
+    this.path = path;
     this.events = events;
     this.spacing = CONFIG.crowd.spacing;
     this.perLane = Math.floor((CONFIG.crowd.windowAhead + CONFIG.crowd.windowBehind) / this.spacing);
@@ -100,14 +103,15 @@ export class CrowdManager {
     const arr = this.mesh.instanceMatrix.array;
     const x = lane.side * (HALF + 1.25 + lane.row * 0.95 + rng.range(-0.15, 0.2));
     const yaw = (lane.side < 0 ? -Math.PI / 2 : Math.PI / 2) + rng.range(-0.35, 0.35);
-    writeYawMatrix(arr, i, x, 0.12, this.distance.worldZ(s), yaw, visible ? rng.range(0.92, 1.06) : 0);
+    this.path.writeMatrix(arr, i, s, x, 0.12, yaw, visible ? rng.range(0.92, 1.06) : 0);
     applyLook(this.mesh, i, randomSpectatorLook(rng));
     this.mesh.geometry.attributes.iAnim.setXY(i, rng.next(), 1);
 
     if (lane.row === 0) {
       const fi = (laneIdx % 2) * this.perLane + slot;
       const pos = this.flashes.geometry.attributes.position;
-      pos.setXYZ(fi, x - lane.side * 0.3, 1.9, this.distance.worldZ(s) + 0.2);
+      this.path.toWorld(s - 0.2, x - lane.side * 0.3, 1.9, _v);
+      pos.setXYZ(fi, _v.x, _v.y, _v.z);
       this.flashes.geometry.attributes.aSeed.setX(fi, rng.next());
       this.flashes.geometry.attributes.aOn.setX(fi, visible && rng.chance(0.45) ? 1 : 0);
     }
@@ -139,7 +143,8 @@ export class CrowdManager {
     const u = this.material.userData.uniforms;
     u.uTime.value = this.time;
     u.uExcite.value = excitement;
-    u.uPlayerZ.value = this.distance.worldZ(playerS);
+    const f = this.path.sample(playerS);
+    u.uPlayerXZ.value.set(f.x, f.z);
     this.flashUniforms.uTime.value = this.time;
     this.flashUniforms.uLevel.value = clamp((excitement - 0.35) * 2.2, 0, 1);
   }

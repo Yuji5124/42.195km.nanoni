@@ -225,7 +225,7 @@ export function makeRoadSignTexture(lines) {
 }
 
 // 巨大ビジョン: ピクセルの柴犬 + コピー
-export function makeVisionTexture(text) {
+export function makeVisionTexture(text, { away = false } = {}) {
   const [c, g] = canvas(1024, 512);
   g.fillStyle = '#0a0a12';
   g.fillRect(0, 0, 1024, 512);
@@ -249,14 +249,18 @@ export function makeVisionTexture(text) {
   const px = 24;
   dog.forEach((row, y) => {
     [...row].forEach((ch, x) => {
-      if (colors[ch]) {
-        g.fillStyle = colors[ch];
-        g.fillRect(40 + x * px, 60 + y * px, px, px);
+      if (!colors[ch]) return;
+      g.fillStyle = colors[ch];
+      if (away) {
+        // 抜け殻: 点線の輪郭だけ残す
+        if (ch !== 'o' || (x + y) % 2) return;
+        g.fillStyle = '#39e6ff';
       }
+      g.fillRect(40 + x * px, 60 + y * px, px, px);
     });
   });
   g.fillStyle = '#ffffff';
-  g.font = `76px ${FONT_JP}`;
+  g.font = `${away ? 60 : 76}px ${FONT_JP}`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.shadowColor = '#ff3d7f';

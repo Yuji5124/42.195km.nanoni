@@ -93,7 +93,7 @@ attribute vec3 iSkin;
 attribute vec3 iHatCol;
 uniform float uTime;
 uniform float uExcite;
-uniform float uPlayerZ;
+uniform vec2 uPlayerXZ;
 varying vec3 vRCol;
 varying vec3 vRimView;
 
@@ -135,8 +135,7 @@ vec3 animPos(vec3 p) {
 // 観客: 声援（uExcite）とプレイヤーとの近さで腕を上げ、跳ねる
 const SPECTATOR_ANIM = /* glsl */ `
 float exciteLevel() {
-  float wz = instanceMatrix[3].z;
-  float nearP = smoothstep(34.0, 0.0, abs(wz - uPlayerZ));
+  float nearP = smoothstep(34.0, 0.0, distance(instanceMatrix[3].xz, uPlayerXZ));
   float personal = 0.55 + 0.45 * fract(iAnim.x * 7.13);
   return clamp(uExcite * personal + nearP * 0.55 * (0.4 + uExcite), 0.0, 1.0);
 }
@@ -164,7 +163,7 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
   const uniforms = {
     uTime: { value: 0 },
     uExcite: { value: 0 },
-    uPlayerZ: { value: 0 },
+    uPlayerXZ: { value: new THREE.Vector2() },
     uRim: { value: rim },
     uRimColor: { value: new THREE.Color(rimColor) },
     // カメラとプレイヤーの間にいる AI をディザで消す距離（0 = 無効）

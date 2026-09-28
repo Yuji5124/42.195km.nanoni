@@ -4,6 +4,7 @@ import { MODES } from '../config.js';
 
 // CameraDirector: 「見え方を壊す」担当。レースロジックとは独立。
 // 各モードは毎フレーム「ポーズ」（位置・注視点・FOV・near・フォグ）を返すだけ。
+// ポーズはコース座標（s = 前進量, x = 横, y = 高さ）で考え、CoursePath でワールドに直す → カーブに自然に追従。
 // モード切替は 2 つのライブポーズをブレンドする（被写体の画面上サイズを保つドリーズーム補間）。
 // TV 中継はショットを「カット」で切り替える。
 
@@ -31,10 +32,11 @@ const TV_SHOTS = [
 ];
 
 export class CameraDirector {
-  constructor(camera, scene, bus) {
+  constructor(camera, scene, bus, path) {
     this.camera = camera;
     this.scene = scene;
     this.bus = bus;
+    this.path = path;
     this.poses = { a: pose(), b: pose(), out: pose() };
     this.reset();
   }
@@ -50,11 +52,12 @@ export class CameraDirector {
     this.trauma = 0;
     this.tvIndex = 0;
     this.tvTime = 0;
-    this.roadsideAnchor = new THREE.Vector3();
-    this.goalAnchorZ = 0;
+    this.roadside = { s: 0, x: 6.9, y: 2.4 };
+    this.goalS = 0;
     this.changes = 0;
     this.sideBlend = 0;
     this.shotLabel = '';
+    this.lean = 0;
   }
 
   setMode(mode, { transition = 1.2, cut = false } = {}) {
@@ -79,7 +82,7 @@ export class CameraDirector {
 
   computePose(mode, out, ctx, t) {
     const p = ctx.player;
-    const z = -p.s;
+    const W = (s, x, y, v) => this.path.toWorld(s, x, y, v);
     out.roll = 0;
     out.near = 0.1;
     out.fogNear = 70;
@@ -87,32 +90,34 @@ export class CameraDirector {
     switch (mode) {
       case MODES.TITLE: {
         const a = ctx.time * 0.12;
-        out.pos.set(Math.sin(a) * 16, 6.5 + Math.sin(a * 0.7) * 1.5, z + Math.cos(a) * 16 - 4);
-        out.look.set(0, 1.4, z - 6);
+        W(p.s, 0, 0, tmpA);
+        out.pos.set(tmpA.x + Math.sin(a) * 16, 6.5 + Math.sin(a * 0.7) * 1.5, tmpA.z + Math.cos(a) * 16);
+        W(p.s + 6, 0, 1.4, out.look);
         out.fov = 50;
         break;
       }
       case MODES.START: {
         const k = clamp(t / 4, 0, 1);
-        out.pos.set(7 - k * 4, 15 - k * 8, z + 22 - k * 10);
-        out.look.set(0, 1, z - 8);
+        W(p.s - 22 + k * 10, 7 - k * 4, 15 - k * 8, out.pos);
+        W(p.s + 8, 0, 1, out.look);
         out.fov = 48;
         break;
       }
       case MODES.NORMAL: {
         const speedN = clamp((p.speed - 12) / 12, 0, 1);
-        out.pos.set(this.followX * 0.6, 3.1 + this.followY * 0.35, z + 6.2 - speedN * 0.8);
-        out.look.set(this.followX * 0.9, 1.1 + this.followY * 0.5, z - 12);
+        W(p.s - 6.2 + speedN * 0.8, this.followX * 0.6, 3.1 + this.followY * 0.35, out.pos);
+        W(p.s + 12, this.followX * 0.9, 1.1 + this.followY * 0.5, out.look);
         out.fov = 60 + speedN * 13;
+        out.roll = this.lean;
         break;
       }
       case MODES.TV_BROADCAST:
-        this.tvPose(out, ctx, z);
+        this.tvPose(out, ctx);
         break;
       case MODES.SIDE_2D: {
         const D = 78;
-        out.pos.set(p.x + D, 3.6, z - 5);
-        out.look.set(p.x, 3.6, z - 5);
+        W(p.s + 5, p.x + D, 3.6, out.pos);
+        W(p.s + 5, p.x, 3.6, out.look);
         out.fov = 9.5;
         out.near = D - 3.2;
         out.fogNear = D + 60;
@@ -121,56 +126,56 @@ export class CameraDirector {
       }
       case MODES.GOAL: {
         // ゴール正面から迎えるカメラ。ゴール後はプレイヤーの前を後退しながら映し続ける
-        const gz = this.goalAnchorZ;
-        out.pos.set(2.8 + Math.sin(t * 0.6) * 1.5, 1.8, Math.min(gz - 11, z - 7.5));
-        out.look.set(p.x, 1.3, z);
+        W(Math.max(this.goalS + 11, p.s + 7.5), 2.8 + Math.sin(t * 0.6) * 1.5, 1.8, out.pos);
+        W(p.s, p.x, 1.3, out.look);
         out.fov = 42;
         out.fogNear = 60;
         break;
       }
       default:
-        out.pos.set(0, 3, z + 7);
-        out.look.set(0, 1, z - 10);
+        W(p.s - 7, 0, 3, out.pos);
+        W(p.s + 10, 0, 1, out.look);
         out.fov = 60;
     }
   }
 
-  tvPose(out, ctx, z) {
+  tvPose(out, ctx) {
     const p = ctx.player;
+    const W = (s, x, y, v) => this.path.toWorld(s, x, y, v);
     const shot = TV_SHOTS[this.tvIndex % TV_SHOTS.length];
     const t = this.tvTime;
     this.shotLabel = shot.label;
     switch (shot.name) {
       case 'HELI':
         // 道路の真上（ビルの谷間）から見下ろす
-        out.pos.set(p.x * 0.3 + 2.5, 32 - t * 0.8, z + 26 - t * 1.5);
-        out.look.set(p.x * 0.6, 0.5, z - 10);
+        W(p.s - 26 + t * 1.5, p.x * 0.3 + 2.5, 32 - t * 0.8, out.pos);
+        W(p.s + 10, p.x * 0.6, 0.5, out.look);
         out.fov = 40;
         out.fogNear = 90;
         out.fogFar = 520;
         break;
       case 'SIDE_TRACK':
         // 沿道のクレーンカメラ: 観客の頭越しに並走する
-        out.pos.set(-10.5, 4.4, z + 1.2);
-        out.look.set(p.x, 1.1, z - 0.8);
+        W(p.s - 1.2, -10.5, 4.4, out.pos);
+        W(p.s + 0.8, p.x, 1.1, out.look);
         out.fov = 34;
         break;
       case 'FRONT_TELE':
         // 頭越しの正面望遠（先頭集団が圧縮されて見える、マラソン中継の定番）
-        out.pos.set(p.x * 0.3 + 1.2, 7.0, z - 46);
-        out.look.set(p.x, 1.2, z);
+        W(p.s + 46, p.x * 0.3 + 1.2, 7.0, out.pos);
+        W(p.s, p.x, 1.2, out.look);
         out.fov = 13;
         out.fogNear = 90;
         out.fogFar = 520;
         break;
       case 'ROADSIDE':
-        out.pos.copy(this.roadsideAnchor);
-        out.look.set(p.x, 1.2, z);
+        W(this.roadside.s, this.roadside.x, this.roadside.y, out.pos);
+        W(p.s, p.x, 1.2, out.look);
         out.fov = 44;
         break;
       case 'BIKE':
-        out.pos.set(p.x + 1.4, 2.1, z - 7.5);
-        out.look.set(p.x, 1.3, z);
+        W(p.s + 7.5, p.x + 1.4, 2.1, out.pos);
+        W(p.s, p.x, 1.3, out.look);
         out.fov = 52;
         break;
       default:
@@ -183,6 +188,8 @@ export class CameraDirector {
     const p = ctx.player;
     this.followX = damp(this.followX, p.x, 6, dt);
     this.followY = damp(this.followY, p.y, 5, dt);
+    // カーブで少しだけ内側に傾ける（スピード感）
+    this.lean = damp(this.lean, clamp(this.path.kappa(p.s) * p.speed * 2.2, -0.07, 0.07), 3, dt);
 
     // TV ショットの自動カット
     if (this.mode === MODES.TV_BROADCAST) {
@@ -194,7 +201,7 @@ export class CameraDirector {
         this.changes++;
         const next = TV_SHOTS[this.tvIndex % TV_SHOTS.length];
         // 柵の内側・路肩ぎりぎりの定点カメラ
-        if (next.name === 'ROADSIDE') this.roadsideAnchor.set(6.9, 2.4, -p.s - 26);
+        if (next.name === 'ROADSIDE') this.roadside = { s: p.s + 26, x: 6.9, y: 2.4 };
         this.bus.emit('cameraCut', { shot: next.name, label: next.label });
       }
     }
@@ -218,7 +225,7 @@ export class CameraDirector {
       out.near = lerp(a.near, b.near, t);
       out.fogNear = lerp(a.fogNear, b.fogNear, t);
       out.fogFar = lerp(a.fogFar, b.fogFar, t);
-      out.roll = Math.sin(t * Math.PI) * 0.12;
+      out.roll = lerp(a.roll, b.roll, t) + Math.sin(t * Math.PI) * 0.12;
     } else {
       out.pos.copy(b.pos);
       out.look.copy(b.look);
@@ -230,7 +237,7 @@ export class CameraDirector {
     }
 
     // near はプレイヤーを絶対に切らない
-    tmpA.set(p.x, p.y + 1, -p.s);
+    this.path.toWorld(p.s, p.x, p.y + 1, tmpA);
     const distToPlayer = out.pos.distanceTo(tmpA);
     out.near = clamp(out.near, 0.1, Math.max(0.1, distToPlayer - 3));
 
@@ -244,7 +251,7 @@ export class CameraDirector {
     }
 
     // ダッシュ時の FOV キック
-    const fovKick = p.dashing && (this.mode === MODES.NORMAL) ? 5 : 0;
+    const fovKick = p.dashing && this.mode === MODES.NORMAL ? 5 : 0;
     this.fovKick = damp(this.fovKick ?? 0, fovKick, 6, dt);
 
     const cam = this.camera;

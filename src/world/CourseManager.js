@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CONFIG } from '../config.js';
 import { createRng, clamp } from '../core/math.js';
+import { createAnimalInstances, CAT_LOOKS, setAnimalLook } from './AnimalModel.js';
 
 // コース上のゲームプレイ物体（障害物・アイテム・横スクロール区間のパターン）。
 // 前方ウィンドウに距離ベースで生成し、後方に流れたらプールへ戻す。
@@ -77,7 +78,11 @@ const TYPES = {
   onigiri: { kind: 'pickup', h: 0, halfW: 0.6, effect: 'stamina', cap: 12, y: 1.0 },
   shoe: { kind: 'pickup', h: 0, halfW: 0.6, effect: 'boost', cap: 10, y: 1.0 },
   token: { kind: 'pickup', h: 0, halfW: 0.55, effect: 'cheer', cap: 80, y: 1.6 },
+  // 横切る猫（近づくと歩道から飛び出す）。ジャンプで飛び越えられる
+  cat: { kind: 'hazard', h: 0.8, halfW: 0.6, jumpable: true, effect: 'cat', cap: 90, animal: true },
 };
+
+const CAT_SCALE = 2.0;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -86,13 +91,20 @@ const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 
 export class CourseManager {
-  constructor(scene, bus, distance, events) {
+  constructor(scene, bus, distance, events, path) {
     this.bus = bus;
+    this.path = path;
     this.distance = distance;
     this.events = events;
     const geos = buildGeometries();
     this.meshes = {};
     for (const [type, def] of Object.entries(TYPES)) {
+      if (def.animal) {
+        const mesh = createAnimalInstances('cat', def.cap);
+        scene.add(mesh);
+        this.meshes[type] = mesh;
+        continue;
+      }
       let mat;
       if (type === 'token') {
         mat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
@@ -166,8 +178,33 @@ export class CourseManager {
     return 28 + this.rng.range(0, 8);
   }
 
-  spawnNormal(s, density) {
+  // 歩道で待ち、プレイヤーが近づくと横切る猫
+  spawnCat(s, { trigger, speed, from } = {}) {
     const rng = this.rng;
+    const side = from ?? (rng.chance(0.5) ? -1 : 1);
+    this.add('cat', s, side * rng.range(8.4, 10.5), {
+      vx: -side * (speed ?? rng.range(2.6, 4.6)),
+      trigger: trigger ?? rng.range(32, 62),
+      started: false,
+      look: rng.int(0, CAT_LOOKS.length - 1),
+    });
+  }
+
+  // 猫の大移動: 両側から群れで横切る
+  spawnCatWave(s) {
+    const n = this.rng.int(3, 5);
+    for (let k = 0; k < n; k++) {
+      this.spawnCat(s + this.rng.range(-1.5, 1.5), { trigger: 75, speed: this.rng.range(3.5, 6.5) });
+    }
+    return this.rng.range(4, 7);
+  }
+
+  spawnNormal(s, density, cats = 0) {
+    const rng = this.rng;
+    if (cats > 0 && rng.chance(cats)) {
+      this.spawnCat(s);
+      return rng.range(14, 26) / Math.max(0.3, density);
+    }
     const r = rng.next();
     if (r < 0.1) {
       this.add('onigiri', s, rng.range(-LIMIT, LIMIT));
@@ -204,8 +241,13 @@ export class CourseManager {
         this.nextS += this.spawnSide2D(this.nextS, lane);
         continue;
       }
+      if (pattern === 'catStampede') {
+        this.nextS += this.spawnCatWave(this.nextS);
+        continue;
+      }
       const density = this.events.paramAt('obstacles', km);
-      if (density > 0) this.nextS += this.spawnNormal(this.nextS, density);
+      const cats = this.events.paramAt('cats', km) ?? 0;
+      if (density > 0 || cats > 0) this.nextS += this.spawnNormal(this.nextS, density, cats);
       else this.nextS += 12;
     }
 
@@ -214,6 +256,11 @@ export class CourseManager {
     // 後方の破棄 + 吹き飛びアニメ
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
+      if (it.type === 'cat' && !it.knock) {
+        if (!it.started && player.s > it.s - it.trigger) it.started = true;
+        if (it.started) it.x += it.vx * dt;
+        if (Math.abs(it.x) > 11 && it.started && Math.sign(it.x) === Math.sign(it.vx)) it.gone = true;
+      }
       if (it.knock) {
         it.knock.t += dt;
         it.knock.vy -= 20 * dt;
@@ -222,7 +269,7 @@ export class CourseManager {
         it.s += it.knock.vs * dt;
         it.spin += it.knock.spin * dt;
       }
-      if (it.s < player.s - 25 || (it.collected && it.collectT > 0.35) || (it.knock && it.knock.t > 1.6)) {
+      if (it.gone || it.s < player.s - 25 || (it.collected && it.collectT > 0.35) || (it.knock && it.knock.t > 1.6)) {
         this.items.splice(i, 1);
       } else if (it.collected) {
         it.collectT += dt;
@@ -255,9 +302,9 @@ export class CourseManager {
         it.knock = {
           t: 0,
           vx: (it.x - player.x >= 0 ? 1 : -1) * 3 + (Math.random() - 0.5) * 2,
-          vy: 5 + Math.random() * 3,
+          vy: def.animal ? 8 : 5 + Math.random() * 3,
           vs: player.speed * 0.8,
-          spin: 9,
+          spin: def.animal ? 0 : 9, // 猫は着地が得意
         };
         this.bus.emit('hazardHit', { type: it.type, effect: def.effect, item: it });
         continue;
@@ -316,13 +363,23 @@ export class CourseManager {
         pitch = it.spin;
         yaw = it.spin * 0.6;
       }
-      _e.set(pitch, yaw, 0);
-      _m.compose(_p.set(it.x, y, -it.s), _q.setFromEuler(_e), _s.setScalar(Math.max(0.0001, scale)));
+      if (it.def.animal) {
+        // 進む向きを向いて、走っている間だけ脚を動かす
+        scale = CAT_SCALE;
+        yaw = it.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
+        const moving = it.started || it.knock;
+        mesh.geometry.attributes.iAnim.setXY(i, this.time * (moving ? 16 : 2.5) + it.spin, moving ? 1 : 0);
+        setAnimalLook(mesh, i, CAT_LOOKS[it.look]);
+      }
+      const f = this.path.sample(it.s);
+      _e.set(pitch, f.theta + yaw, 0, 'YXZ');
+      _m.compose(_p.set(f.x + f.cos * it.x, y, f.z - f.sin * it.x), _q.setFromEuler(_e), _s.setScalar(Math.max(0.0001, scale)));
       mesh.setMatrixAt(i, _m);
     }
     for (const [type, mesh] of Object.entries(this.meshes)) {
       mesh.count = Math.min(counts[type], TYPES[type].cap);
       mesh.instanceMatrix.needsUpdate = true;
+      if (TYPES[type].animal) mesh.geometry.attributes.iAnim.needsUpdate = true;
     }
   }
 }

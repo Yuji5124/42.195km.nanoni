@@ -73,5 +73,7 @@ export const FX_PRESETS = {
   none: { aberr: 0.0012, scan: 0, pixel: 0, noise: 0.018, vignette: 0.45, posterize: 0, bloom: 0.55 },
   broadcast: { aberr: 0.0022, scan: 0.22, pixel: 0, noise: 0.05, vignette: 0.62, posterize: 0, bloom: 0.5 },
   retro: { aberr: 0, scan: 0.14, pixel: 4, noise: 0, vignette: 0.3, posterize: 14, bloom: 0.35 },
+  // 「東京、読み込み中」: 色ずれとノイズ強め
+  glitch: { aberr: 0.006, scan: 0.3, pixel: 0, noise: 0.08, vignette: 0.5, posterize: 0, bloom: 0.75 },
   goal: { aberr: 0.001, scan: 0, pixel: 0, noise: 0.01, vignette: 0.35, posterize: 0, bloom: 0.8 },
 };

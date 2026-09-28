@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { clamp, createRng, damp } from '../core/math.js';
-import { createHumanMaterial, createHumanInstances, applyLook, randomLook, writeYawMatrix, LOOKS } from '../world/RunnerModel.js';
+import { createHumanMaterial, createHumanInstances, applyLook, randomLook, LOOKS } from '../world/RunnerModel.js';
 import { makeBlobTexture } from '../world/textures.js';
 
 // AI ランナー群。全員を高精度 AI にはしない:
@@ -14,7 +14,8 @@ const LIMIT = CONFIG.road.runnerLimit;
 const RIVAL = 0;
 
 export class AIRunnerManager {
-  constructor(scene, bus, distance) {
+  constructor(scene, bus, distance, path) {
+    this.path = path;
     this.bus = bus;
     this.distance = distance;
     const n = CONFIG.ai.count;
@@ -172,6 +173,15 @@ export class AIRunnerManager {
         if (player.falling) target = 16;
       }
 
+      // 赤信号: 停止線の手前で止まる（行儀のいいランナーたち）
+      const stop = ctx.stopLine;
+      if (stop?.active && s[i] < stop.s - 0.3 && s[i] > stop.s - 40) {
+        // 停止線ぴったりに止まるよう、残り距離から許される速度に抑える
+        const need = Math.max(0, stop.s - 0.9 - s[i]);
+        target = Math.min(target, Math.sqrt(2 * 12 * need));
+        this.speed[i] = Math.min(this.speed[i], Math.sqrt(2 * 22 * need));
+      }
+
       // 前方の渋滞 → 横に避ける / 速度を合わせる
       let blocked = false;
       for (let a = k - 1; a >= Math.max(0, k - 4); a--) {
@@ -293,15 +303,14 @@ export class AIRunnerManager {
     for (let i = 0; i < this.n; i++) {
       const rel = this.s[i] - player.s;
       const visible = rel > -260 && rel < 420;
-      const z = -this.s[i];
       const yaw = -this.vx[i] * 0.06;
-      writeYawMatrix(arr, i, this.x[i], this.y[i], z, yaw, visible ? 1 : 0);
+      this.path.writeMatrix(arr, i, this.s[i], this.x[i], this.y[i], yaw, visible ? 1 : 0);
       const amp = this.speed[i] < 0.5 ? 0.12 : this.y[i] > 0 ? 0.35 : Math.min(1.2, 0.5 + this.speed[i] / 22);
       anim.setXY(i, this.speed[i] < 0.5 ? this.time * 3 + this.phase[i] : this.phase[i], amp);
       const shadowScale = visible ? Math.max(0.3, 1 - this.y[i] * 0.3) : 0;
-      writeYawMatrix(sh, i, this.x[i], 0.04, z, 0, shadowScale);
+      this.path.writeMatrix(sh, i, this.s[i], this.x[i], 0.04, 0, shadowScale);
     }
-    writeYawMatrix(sh, this.n, player.x, 0.04, -player.s, 0, Math.max(0.3, 1 - player.y * 0.3));
+    this.path.writeMatrix(sh, this.n, player.s, player.x, 0.04, 0, Math.max(0.3, 1 - player.y * 0.3));
     this.mesh.instanceMatrix.needsUpdate = true;
     this.shadows.instanceMatrix.needsUpdate = true;
     anim.needsUpdate = true;

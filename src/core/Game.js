@@ -10,10 +10,12 @@ import { RunnerController } from '../race/RunnerController.js';
 import { AIRunnerManager } from '../race/AIRunnerManager.js';
 import { CheerSystem } from '../race/CheerSystem.js';
 import { TokyoChunkManager } from '../world/TokyoChunkManager.js';
+import { CoursePath } from '../world/CoursePath.js';
 import { CrowdManager } from '../world/CrowdManager.js';
 import { CourseManager } from '../world/CourseManager.js';
 import { EventDirector } from '../director/EventDirector.js';
 import { CameraDirector } from '../director/CameraDirector.js';
+import { GagDirector } from '../director/GagDirector.js';
 import { EffectManager } from '../fx/EffectManager.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { UIManager } from '../ui/UIManager.js';
@@ -86,19 +88,30 @@ export class Game {
     this.ui = new UIManager();
     this.distance = new DistanceManager(slice.goalKm);
     this.events = new EventDirector(slice, this.bus);
-    this.chunks = new TokyoChunkManager(scene, this.distance, slice);
-    this.crowd = new CrowdManager(scene, this.distance, this.events);
-    this.course = new CourseManager(scene, this.bus, this.distance, this.events);
-    this.player = new RunnerController(scene, this.bus);
+    this.path = new CoursePath(slice.curves, this.distance, { endS: this.distance.goalUnits + 1600 });
+    this.chunks = new TokyoChunkManager(scene, this.distance, slice, this.path);
+    this.crowd = new CrowdManager(scene, this.distance, this.events, this.path);
+    this.course = new CourseManager(scene, this.bus, this.distance, this.events, this.path);
+    this.player = new RunnerController(scene, this.bus, this.path);
     this.marker = this.buildMarker();
     scene.add(this.marker);
-    this.ai = new AIRunnerManager(scene, this.bus, this.distance);
+    this.ai = new AIRunnerManager(scene, this.bus, this.distance, this.path);
     this.race = new RaceManager(this.bus, this.distance, this.ai, this.player);
     this.cheer = new CheerSystem(this.bus);
-    this.cameraDirector = new CameraDirector(this.camera, scene, this.bus);
-    this.fx = new EffectManager(renderer, scene, this.camera);
+    this.cameraDirector = new CameraDirector(this.camera, scene, this.bus, this.path);
+    this.fx = new EffectManager(renderer, scene, this.camera, this.path);
     this.audio = new AudioManager(this.bus);
     if (this.params.has('mute')) this.audio.setMuted(true);
+    const sfxMap = { signal: 'signalChime' };
+    this.gags = new GagDirector(scene, this.path, this.distance, this.chunks, {
+      say: (t, force) => this.say(t, force),
+      fever: (t) => this.ui.fever(t),
+      hint: (t, touchText) => this.ui.hint(this.input.isTouch ? touchText ?? t : t, 5000),
+      cheer: (kind, opts) => this.cheer.add(kind, opts),
+      sfx: (name, arg) => this.audio[sfxMap[name] ?? name]?.(arg),
+      shake: (v) => this.cameraDirector.shake(v),
+      hype: (v) => this.cheer.hype(v),
+    });
 
     this.ui.setSliceGoal(slice.goalKm, CONFIG.fullMarathonKm);
     this.wire();
@@ -212,9 +225,16 @@ export class Game {
         audio.whoosh();
       }
       fx.setPreset(state.fx);
+      const wire = state.world === 'wireframe';
+      if (wire !== this.chunks.buildingMaterial.wireframe) {
+        this.chunks.setWireframe(wire);
+        fx.glitchBurst(0.9);
+        audio.glitch();
+      }
       ui.setTV(state.camera === MODES.TV_BROADCAST);
       if (this.race.running) audio.setMusic(state.music);
       if (silent) return;
+      if (event.gag) this.gags.trigger(event.gag, player);
       if (event.caption) ui.caption(event.caption.main, event.caption.sub);
       if (event.commentary) this.say(event.commentary, true);
       const hint = this.input.isTouch ? event.hintTouch ?? event.hint : event.hint;
@@ -256,7 +276,12 @@ export class Game {
         cheer.add('nearMiss');
         this.nearMissCooldown = 0.8;
       } else cheer.add('overtake');
-      if ([3, 5, 8, 12].includes(e.burst)) cheer.add('multiOvertake', { label: `${e.burst} OVERTAKE!`, scale: Math.min(2, e.burst / 5) });
+      // 連続追い抜きの節目は、同じ波の中で一度ずつ
+      if (e.burst <= 2) this.lastBurstShown = 0;
+      if ([3, 5, 8, 12].includes(e.burst) && e.burst > (this.lastBurstShown ?? 0)) {
+        this.lastBurstShown = e.burst;
+        cheer.add('multiOvertake', { label: `${e.burst} OVERTAKE!`, scale: Math.min(2, e.burst / 5) });
+      }
       if (e.rival) this.say(pick(LINES.rivalPass));
       audio.overtake(e.rival || e.burst >= 3);
     });
@@ -284,7 +309,7 @@ export class Game {
       audio.fall();
       cam.shake(0.7);
       fx.glitchBurst(0.25);
-      this.say(pick(reason === 'banana' ? LINES.banana : LINES.fall), true);
+      if (reason !== 'car') this.say(pick(reason === 'banana' ? LINES.banana : LINES.fall), true);
       ui.fever(reason === 'banana' ? 'つるっ' : 'ドテッ');
     });
     bus.on('playerRecover', () => {
@@ -303,32 +328,48 @@ export class Game {
         player.addStamina(45);
         cheer.add('pickup', { label: 'おにぎり STAMINA+' });
         audio.pickup();
-        fx.burst(item.x, item.y, -item.s, [1.4, 1.4, 1.4]);
+        this.burstAt(item, [1.4, 1.4, 1.4]);
       } else if (type === 'shoe') {
         player.boost(3.2);
         cheer.add('pickup', { label: 'SPEED SHOES' });
         audio.pickup();
-        fx.burst(item.x, item.y, -item.s, [0.3, 1, 1.6]);
+        this.burstAt(item, [0.3, 1, 1.6]);
       } else if (type === 'token') {
         cheer.add('token');
         audio.coin();
-        fx.burst(item.x, item.y, -item.s, [0.4, 1.6, 1.8], 14);
+        this.burstAt(item, [0.4, 1.6, 1.8], 14);
       }
     });
     bus.on('hazardHit', ({ effect }) => {
-      if (effect === 'stagger') {
+      if (effect === 'cat') {
+        player.hitStagger(0.3);
+        audio.meow();
+        cam.shake(0.2);
+        this.say('猫にぶつかった！ …猫は無事です！ 見事に着地しました！');
+      } else if (effect === 'stagger') {
         player.hitStagger(0.45);
         cam.shake(0.3);
       } else if (effect === 'fall') player.fall('crash');
       else if (effect === 'slip') player.fall('banana');
     });
-    bus.on('hazardClear', ({ perfect }) => cheer.add(perfect ? 'perfectClear' : 'clear'));
+    bus.on('hazardClear', ({ type, perfect }) => {
+      if (type === 'cat') {
+        cheer.add('nyanJump');
+        audio.meow();
+      } else cheer.add(perfect ? 'perfectClear' : 'clear');
+    });
     bus.on('hazardNearMiss', ({ type }) => {
       if (type === 'barrier' || type === 'banana') cheer.add('nearMiss', { scale: 0.6, label: 'CLOSE!' });
+      else if (type === 'cat') cheer.add('nearMiss', { scale: 0.6, label: 'CAT DODGE' });
     });
 
-    bus.on('cheer', ({ label, amount, combo }) => {
-      ui.popup(label, amount, { big: amount >= 100 });
+    bus.on('cheer', ({ kind, label, amount, combo }) => {
+      // ただの追い抜きは連続するとポップが埋まるので間引く（スコアは全部入る）
+      const now = performance.now();
+      if (kind !== 'overtake' || now - (this.lastOvertakePop ?? 0) > 700) {
+        ui.popup(label, amount, { big: amount >= 100 });
+        if (kind === 'overtake') this.lastOvertakePop = now;
+      }
       if ([5, 10, 15, 20, 30].includes(combo)) {
         ui.fever(`COMBO ×${combo}`);
         audio.cheerSwell(1 + combo / 10);
@@ -346,7 +387,7 @@ export class Game {
 
     bus.on('finish', ({ position }) => {
       this.slowMo = 1.5;
-      cam.goalAnchorZ = -this.race.goalS;
+      cam.goalS = this.race.goalS;
       cam.setMode(MODES.GOAL, { transition: 0.8 });
       this.chunks.getLandmark('goalArch')?.breakTape?.();
       fx.setPreset('goal');
@@ -361,6 +402,12 @@ export class Game {
     });
   }
 
+  // コース座標 (s, x, y) のアイテム位置でパーティクルを弾けさせる
+  burstAt(item, color, count) {
+    const v = this.path.toWorld(item.s, item.x, item.y, new THREE.Vector3());
+    this.fx.burst(v.x, v.y, v.z, color, count);
+  }
+
   say(text, force = false) {
     if (!force && this.sayCooldown > 0) return;
     this.ui.say(text);
@@ -372,6 +419,7 @@ export class Game {
     this.player.reset(START.s, START.x);
     this.ai.reset(START);
     this.course.reset(0);
+    this.gags.reset();
     this.chunks.reset();
     this.crowd.reset();
     this.cheer.reset();
@@ -452,6 +500,12 @@ export class Game {
       out.axisX = 1;
       out.axisY = 0;
     }
+    // 赤信号では止まる（行儀のいい自動操縦）
+    const stop = this.gags.stopLine;
+    if (stop.active && p.s < stop.s && stop.s - p.s < 24) {
+      out.axisY = -1;
+      out.dash = false;
+    }
     const hz = this.course.hazardAhead(p.s, p.x, 14);
     if (hz) {
       const t = (hz.s - p.s) / Math.max(1, p.speed);
@@ -510,7 +564,8 @@ export class Game {
 
     if (running) events.update(km);
     const state = events.current;
-    const rules = state.rules ?? {};
+    const patch = running ? this.gags.rulesPatch(player) : null;
+    const rules = patch ? { ...(state.rules ?? {}), ...patch } : state.rules ?? {};
 
     player.update(dt, this.input, {
       canControl: running,
@@ -528,7 +583,9 @@ export class Game {
       finalStretch: !!state.calm,
       goalS: race.goalS,
       excitement: cheer.excitement,
+      stopLine: this.gags.stopLine,
     });
+    if (playing) this.gags.update(dt, player);
     race.update(dt);
 
     // 声援の条件
@@ -548,10 +605,11 @@ export class Game {
     this.cameraDirector.update(dt, { player, time: this.time });
     const camMode = this.cameraDirector.mode;
     this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D);
-    this.marker.position.set(player.x, player.y + 2.7 + Math.sin(this.time * 6) * 0.1, -player.s);
+    this.path.toWorld(player.s, player.x, player.y + 2.7 + Math.sin(this.time * 6) * 0.1, this.marker.position);
     // カメラとプレイヤーの間にいる AI ランナーは透かす（主役が群衆に埋もれないように）
     const cp = this.camera.position;
-    const camDist = Math.hypot(cp.x - player.x, cp.y - (player.y + 1), cp.z + player.s);
+    const pw = player.position;
+    const camDist = Math.hypot(cp.x - pw.x, cp.y - (pw.y + 1), cp.z - pw.z);
     this.ai.material.userData.uniforms.uNearFade.value = camDist < 14 ? camDist - 1.2 : 0;
     this.chunks.update(player.s, dt, this.cameraDirector.sideBlend);
     this.fx.update(dt, { player, tier: cheer.tier, excitement: cheer.excitement, playing });
@@ -559,7 +617,7 @@ export class Game {
     this.audio.update(realDt, { excitement: cheer.excitement, playing });
 
     // プレイヤー周りのネオンライト / 空は常にカメラ中心
-    this.playerLight.position.set(player.x, 2.6, -player.s + 1.5);
+    this.path.toWorld(player.s - 1.5, player.x, 2.6, this.playerLight.position);
     this.playerLight.color.setHSL(0.52 - cheer.tier * 0.09, 1, 0.6);
     this.sky.position.copy(this.camera.position);
 

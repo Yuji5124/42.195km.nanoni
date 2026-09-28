@@ -22,6 +22,14 @@ const ACTIONS = {
   pickup: { base: 20, label: 'GET!' },
   finalSprint: { base: 60, label: 'FINAL SPRINT' },
   highFive: { base: 15, label: 'HIGH FIVE', combo: false },
+  nyanJump: { base: 45, label: 'NYAN JUMP' },
+  wan: { base: 18, label: 'WAN!' },
+  manners: { base: 250, label: 'MANNERS!' },
+  ignoreSignal: { base: -150, label: '信号無視…' },
+  trainPass: { base: 80, label: 'TRAIN OVERTAKE' },
+  trainBeat: { base: 400, label: '電車に勝った!' },
+  leapCar: { base: 150, label: 'CAR JUMP!?' },
+  giantDog: { base: 60, label: 'デカ柴!!' },
 };
 
 export class CheerSystem {
@@ -50,6 +58,16 @@ export class CheerSystem {
     const a = ACTIONS[kind];
     if (!a) return 0;
     const base = (opts.base ?? a.base) * (opts.scale ?? 1);
+    // マイナス（ブーイング）: 倍率なしで減点し、コンボと盛り上がりを冷ます
+    if (base < 0) {
+      const amount = Math.max(-this.cheer, Math.round(base));
+      this.cheer += amount;
+      this.combo = 0;
+      this.comboTimer = 0;
+      this.heat = Math.max(0, this.heat - 0.4);
+      this.bus.emit('cheer', { kind, amount, label: opts.label ?? a.label, combo: 0, multiplier: 1 });
+      return amount;
+    }
     const countsCombo = opts.combo ?? a.combo ?? true;
     if (countsCombo) {
       this.combo += 1;
@@ -111,6 +129,10 @@ export class CheerSystem {
       this.tier = tier;
       this.bus.emit('cheerTier', { tier, up });
     }
+  }
+
+  hype(v) {
+    this.heat = clamp(this.heat + v, 0, 1.2);
   }
 
   // 声援の後押し（ほんの少しだけ速くなる）

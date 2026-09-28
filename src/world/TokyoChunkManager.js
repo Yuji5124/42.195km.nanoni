@@ -12,13 +12,17 @@ import areasData from '../data/areas.json';
 
 // ローポリ × デジタル東京のチャンクストリーミング。
 // 42.195km を 1 枚のマップにせず、前方のチャンクを生成 → 走る → 後方のスロットを再利用。
-// ビル・看板・街灯はすべてグローバル InstancedMesh の「スロット範囲」に書き込む（GC なし、draw call 固定）。
+// 道路・歩道・柵はチャンクごとの「中心線に沿ったリボン」なのでカーブに追従する。
+// ビル・看板・街灯はグローバル InstancedMesh の「スロット範囲」に書き込む（GC なし、draw call 固定）。
 
 const L = CONFIG.chunk.length;
 const SLOTS = CONFIG.chunk.ahead + CONFIG.chunk.behind + 2;
 const PER = { building: 36, vsign: 10, hsign: 8, lamp: 10, cross: 1 };
 const HALF = CONFIG.road.halfWidth;
+const SW = CONFIG.road.sidewalk + 1;
 const BUILD_X = HALF + CONFIG.road.sidewalk + 0.5;
+const SECTIONS = 41; // 1 チャンク 120 単位を 3 単位刻みで
+const MOAT = { wall: -12.6, water: -46, deckIn: -12.6, deckOut: -15.8, waterY: -0.9, deckY: 1.2 };
 
 const BUILDING_VERT = /* glsl */ `
 attribute vec3 iWin;
@@ -41,12 +45,13 @@ varying vec3 vFacade;
 varying vec2 vParams;
 uniform float uTime;
 uniform float uWindowBoost;
+uniform float uWire;
 float bhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 `;
 
 function createBuildingMaterial() {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const uniforms = { uTime: { value: 0 }, uWindowBoost: { value: 1 } };
+  const uniforms = { uTime: { value: 0 }, uWindowBoost: { value: 1 }, uWire: { value: 0 } };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -90,10 +95,12 @@ function createBuildingMaterial() {
             float pulse = 0.75 + 0.25 * sin(uTime * 3.0 + vParams.x * 40.0);
             totalEmissiveRadiance += neonC * edge * 1.8 * pulse;
           }
-        }`
+        }
+        // 「東京、読み込み中」: ワイヤーフレームを発光させる
+        totalEmissiveRadiance += vec3(0.25, 0.95, 1.1) * uWire * (0.8 + 0.2 * sin(uTime * 20.0 + vBPos.y));`
       );
   };
-  mat.customProgramCacheKey = () => 'tokyo-building-v1';
+  mat.customProgramCacheKey = () => 'tokyo-building-v2';
   return mat;
 }
 
@@ -117,29 +124,55 @@ function createSignMesh(texture, cols, rows, w, h, count) {
   return mesh;
 }
 
+// 中心線に沿ったリボン（strips 本 × SECTIONS 断面 × 2 頂点）
+function createRibbonGeometry(strips) {
+  const n = strips * SECTIONS * 2;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * 2), 2));
+  const idx = [];
+  for (let r = 0; r < strips; r++) {
+    for (let k = 0; k < SECTIONS - 1; k++) {
+      const a = (r * SECTIONS + k) * 2;
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  geo.setIndex(idx);
+  return geo;
+}
+
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3();
 const _e = new THREE.Euler();
+const _up = new THREE.Vector3(0, 1, 0);
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-const _c = new THREE.Color();
 
 export class TokyoChunkManager {
-  constructor(scene, distance, slice) {
+  constructor(scene, distance, slice, path) {
     this.scene = scene;
     this.distance = distance;
     this.slice = slice;
+    this.path = path;
     this.areas = areasData.areas;
     this.slotChunk = new Array(SLOTS).fill(null);
     this.chunkSlot = new Map();
     this.time = 0;
 
-    this.backdropRanges = slice.landmarks
-      .filter((l) => l.type === 'backdrop2d')
-      .map((l) => [distance.kmToUnits(l.km) - 40, distance.kmToUnits(l.until) + 40]);
+    const range = (type, pad = 0) =>
+      slice.landmarks
+        .filter((l) => l.type === type)
+        .map((l) => [distance.kmToUnits(l.km) - pad, distance.kmToUnits(l.until) + pad]);
+    this.backdropRanges = range('backdrop2d', 40);
+    this.moatRanges = range('moat');
+    // 信号のある交差点は、横切る道路のためにビルを建てない
+    this.gapRanges = slice.landmarks
+      .filter((l) => l.type === 'signal')
+      .map((l) => [distance.kmToUnits(l.km) - 6, distance.kmToUnits(l.km) + 20]);
 
-    this.buildStatic();
+    this.buildRibbons();
     this.buildInstanced();
     this.buildSkyline();
 
@@ -154,56 +187,92 @@ export class TokyoChunkManager {
     return a;
   }
 
-  // ---- 道路・歩道・柵: プレイヤーに追従する長い平面（テクスチャ周期でスナップしてズレを防ぐ）
-  buildStatic() {
-    const len = (CONFIG.chunk.ahead + CONFIG.chunk.behind + 1) * L;
-    this.stripLength = len;
-
+  // ---- 道路・歩道・柵・お堀: スロットごとのリボンメッシュ
+  buildRibbons() {
     const roadTex = makeRoadTexture();
-    const road = new THREE.PlaneGeometry(HALF * 2, len, 1, 1);
-    road.rotateX(-Math.PI / 2);
-    this.scaleUv(road, 1, len / 14);
-    this.road = new THREE.Mesh(road, new THREE.MeshLambertMaterial({ map: roadTex }));
-    this.road.userData.period = 14;
-
     const swTex = makeSidewalkTexture();
-    const sw = new THREE.PlaneGeometry(CONFIG.road.sidewalk + 1, len);
-    sw.rotateX(-Math.PI / 2);
-    this.scaleUv(sw, 1.4, len / 4);
-    const swMat = new THREE.MeshLambertMaterial({ map: swTex });
-    this.sidewalks = [-1, 1].map((side) => {
-      const m = new THREE.Mesh(sw, swMat);
-      m.position.set(side * (HALF + (CONFIG.road.sidewalk + 1) / 2), 0.12, 0);
-      m.userData.period = 4;
-      return m;
-    });
-
     const fenceTex = makeFenceTexture();
-    const fence = new THREE.PlaneGeometry(len, 1.0);
-    this.scaleUv(fence, len / 16, 1);
-    const fenceMat = new THREE.MeshLambertMaterial({ map: fenceTex, side: THREE.DoubleSide, emissive: 0x0a1a55 });
-    this.fences = [-1, 1].map((side) => {
-      const m = new THREE.Mesh(fence, fenceMat);
-      m.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
-      m.position.set(side * (HALF + 0.35), 0.62, 0);
-      m.userData.period = 16;
-      return m;
-    });
+    const mats = {
+      road: new THREE.MeshLambertMaterial({ map: roadTex }),
+      sidewalk: new THREE.MeshLambertMaterial({ map: swTex }),
+      fence: new THREE.MeshLambertMaterial({ map: fenceTex, side: THREE.DoubleSide, emissive: 0x0a1a55 }),
+      moat: [
+        new THREE.MeshPhongMaterial({ color: 0x1d5a8a, emissive: 0x0c2e52, specular: 0x9ab8ff, shininess: 120 }),
+        new THREE.MeshLambertMaterial({ color: 0x4a4852, side: THREE.DoubleSide }),
+        new THREE.MeshLambertMaterial({ color: 0x5a5c66 }),
+      ],
+    };
+    this.slotMeshes = [];
+    for (let slot = 0; slot < SLOTS; slot++) {
+      const road = new THREE.Mesh(createRibbonGeometry(1), mats.road);
+      const sidewalk = new THREE.Mesh(createRibbonGeometry(2), mats.sidewalk);
+      const fence = new THREE.Mesh(createRibbonGeometry(2), mats.fence);
+      const moatGeo = createRibbonGeometry(3);
+      const per = (SECTIONS - 1) * 6;
+      moatGeo.addGroup(0, per, 0);
+      moatGeo.addGroup(per, per, 1);
+      moatGeo.addGroup(per * 2, per, 2);
+      const moat = new THREE.Mesh(moatGeo, mats.moat);
+      const meshes = { road, sidewalk, fence, moat };
+      for (const m of Object.values(meshes)) {
+        m.frustumCulled = false;
+        m.visible = false;
+        this.scene.add(m);
+      }
+      this.slotMeshes.push(meshes);
+    }
 
-    this.ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(900, len + 400),
-      new THREE.MeshLambertMaterial({ color: 0x0d0d14 })
-    );
+    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshLambertMaterial({ color: 0x0d0d14 }));
     this.ground.rotation.x = -Math.PI / 2;
-    this.ground.position.y = -0.02;
-
-    this.strips = [this.road, ...this.sidewalks, ...this.fences, this.ground];
-    for (const m of this.strips) this.scene.add(m);
+    this.ground.position.y = -1.0;
+    this.scene.add(this.ground);
   }
 
-  scaleUv(geo, su, sv) {
+  // リボン 1 本分（断面 k の 2 頂点）を書き込む
+  writeRibbon(geo, strip, k, s, x0, y0, x1, y1, uv0, uv1, normal) {
+    const pos = geo.attributes.position;
+    const nor = geo.attributes.normal;
     const uv = geo.attributes.uv;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
+    const i = (strip * SECTIONS + k) * 2;
+    this.path.toWorld(s, x0, y0, _p);
+    pos.setXYZ(i, _p.x, _p.y, _p.z);
+    this.path.toWorld(s, x1, y1, _p);
+    pos.setXYZ(i + 1, _p.x, _p.y, _p.z);
+    nor.setXYZ(i, normal.x, normal.y, normal.z);
+    nor.setXYZ(i + 1, normal.x, normal.y, normal.z);
+    uv.setXY(i, uv0[0], uv0[1]);
+    uv.setXY(i + 1, uv1[0], uv1[1]);
+  }
+
+  fillRibbons(slot, s0) {
+    const { road, sidewalk, fence, moat } = this.slotMeshes[slot];
+    let anyMoat = false;
+    const side = new THREE.Vector3();
+    for (let k = 0; k < SECTIONS; k++) {
+      const s = s0 + (k * L) / (SECTIONS - 1);
+      const f = this.path.sample(s);
+      side.set(f.cos, 0, -f.sin); // 右方向 R
+      this.writeRibbon(road.geometry, 0, k, s, -HALF, 0, HALF, 0, [0, s / 14], [1, s / 14], _up);
+      this.writeRibbon(sidewalk.geometry, 0, k, s, -HALF - SW, 0.12, -HALF, 0.12, [0, s / 4], [1.4, s / 4], _up);
+      this.writeRibbon(sidewalk.geometry, 1, k, s, HALF, 0.12, HALF + SW, 0.12, [0, s / 4], [1.4, s / 4], _up);
+      const fx = HALF + 0.35;
+      this.writeRibbon(fence.geometry, 0, k, s, -fx, 0.12, -fx, 1.12, [s / 16, 0], [s / 16, 1], side);
+      this.writeRibbon(fence.geometry, 1, k, s, fx, 0.12, fx, 1.12, [-s / 16, 0], [-s / 16, 1], side.clone().negate());
+
+      // お堀（左側）: 範囲外は幅ゼロに潰す
+      const inMoat = this.inMoat(s);
+      anyMoat ||= inMoat;
+      const w = inMoat ? 1 : 0;
+      this.writeRibbon(moat.geometry, 0, k, s, MOAT.wall + (MOAT.water - MOAT.wall) * w, MOAT.waterY, MOAT.wall, MOAT.waterY, [0, 0], [0, 0], _up);
+      this.writeRibbon(moat.geometry, 1, k, s, MOAT.wall, MOAT.waterY + (0.12 - MOAT.waterY) * w, MOAT.wall, MOAT.waterY, [0, 0], [0, 0], side);
+      this.writeRibbon(moat.geometry, 2, k, s, MOAT.deckOut * w + MOAT.deckIn * (1 - w), MOAT.deckY, MOAT.deckIn, MOAT.deckY, [0, 0], [0, 0], _up);
+    }
+    for (const m of [road, sidewalk, fence, moat]) {
+      const g = m.geometry.attributes;
+      g.position.needsUpdate = g.normal.needsUpdate = g.uv.needsUpdate = true;
+      m.visible = true;
+    }
+    moat.visible = anyMoat;
   }
 
   buildInstanced() {
@@ -246,13 +315,13 @@ export class TokyoChunkManager {
     cwTex.colorSpace = THREE.SRGBColorSpace;
     const crossGeo = new THREE.PlaneGeometry(HALF * 2, 4.5);
     crossGeo.rotateX(-Math.PI / 2);
+    crossGeo.translate(0, 0.025, 0);
     this.crosswalks = new THREE.InstancedMesh(
       crossGeo,
       new THREE.MeshLambertMaterial({ map: cwTex, transparent: true, depthWrite: false }),
       SLOTS * PER.cross
     );
     this.crosswalks.frustumCulled = false;
-    this.crosswalks.position.y = 0.025;
     this.scene.add(this.crosswalks);
 
     for (const mesh of [this.buildings, this.vsigns, this.hsigns, this.poles, this.lampHeads, this.crosswalks]) {
@@ -287,12 +356,18 @@ export class TokyoChunkManager {
     this.scene.add(this.skyline);
   }
 
+  setWireframe(on) {
+    this.buildingMaterial.wireframe = on;
+    this.buildingMaterial.userData.uniforms.uWire.value = on ? 1 : 0;
+  }
+
   reset() {
     for (let slot = 0; slot < SLOTS; slot++) {
       if (this.slotChunk[slot] !== null) this.clearSlot(slot);
       this.slotChunk[slot] = null;
     }
     this.chunkSlot.clear();
+    this.setWireframe(false);
     for (const lm of this.landmarks) {
       if (lm.built) {
         this.scene.remove(lm.built.group);
@@ -306,14 +381,10 @@ export class TokyoChunkManager {
     this.time += dt;
     this.buildingMaterial.userData.uniforms.uTime.value = this.time;
 
-    // 追従ストリップ
-    const pz = this.distance.worldZ(playerS);
-    for (const m of this.strips) {
-      const period = m.userData.period ?? 1;
-      const center = pz - this.stripLength * 0.3;
-      m.position.z = Math.round(center / period) * period;
-    }
-    this.skyline.position.z = pz;
+    const f = this.path.sample(playerS);
+    this.ground.position.set(f.x, -1.0, f.z);
+    this.skyline.position.set(f.x, 0, f.z);
+    this.skyline.rotation.y = f.theta;
     this.skyline.visible = sideBlend < 0.5;
 
     // チャンクの確保と再利用
@@ -343,6 +414,14 @@ export class TokyoChunkManager {
     return this.backdropRanges.some(([a, b]) => s >= a && s <= b);
   }
 
+  inGap(a, b) {
+    return this.gapRanges.some(([g0, g1]) => b > g0 && a < g1);
+  }
+
+  inMoat(s) {
+    return this.moatRanges.some(([a, b]) => s >= a && s <= b);
+  }
+
   clearSlot(slot) {
     const ranges = [
       [this.buildings, PER.building],
@@ -356,6 +435,16 @@ export class TokyoChunkManager {
       for (let i = 0; i < per; i++) mesh.setMatrixAt(slot * per + i, ZERO);
       mesh.instanceMatrix.needsUpdate = true;
     }
+    for (const m of Object.values(this.slotMeshes[slot])) m.visible = false;
+  }
+
+  // (s, x, y) に、進行方向 + yawOffset を向いた行列を作る
+  placeMatrix(s, x, y, yawOffset, sx, sy, sz) {
+    const f = this.path.sample(s);
+    _p.set(f.x + f.cos * x, y, f.z - f.sin * x);
+    _e.set(0, f.theta + yawOffset, 0);
+    _m.compose(_p, _q.setFromEuler(_e), _s.set(sx, sy, sz));
+    return _m;
   }
 
   fillSlot(slot, idx) {
@@ -364,23 +453,19 @@ export class TokyoChunkManager {
     const s0 = idx * L;
     const km = this.distance.unitsToKm(s0 + L / 2);
     const area = this.areaAt(km);
-    const z = (s) => this.distance.worldZ(s);
+    this.fillRibbons(slot, s0);
 
     const b = { i: 0, v: 0, h: 0, lamp: 0 };
     const battr = this.buildings.geometry.attributes;
     const [hMin, hMax] = area.height;
 
     const cross = idx > 0 && rng.chance(0.45) ? rng.range(28, 92) : null;
-    if (cross !== null) {
-      _m.makeTranslation(0, 0, z(s0 + cross));
-      this.crosswalks.setMatrixAt(slot * PER.cross, _m);
-    }
+    if (cross !== null) this.crosswalks.setMatrixAt(slot * PER.cross, this.placeMatrix(s0 + cross, 0, 0, 0, 1, 1, 1));
 
     const putBuilding = (x, sCenter, depth, height, width, neon) => {
       if (b.i >= PER.building) return;
       const i = slot * PER.building + b.i++;
-      _m.compose(_p.set(x, 0, z(sCenter)), _q.identity(), _s.set(depth, height, width));
-      this.buildings.setMatrixAt(i, _m);
+      this.buildings.setMatrixAt(i, this.placeMatrix(sCenter, x, 0, 0, depth, height, width));
       const w = area.window;
       const tint = rng.range(0.75, 1.15);
       battr.iWin.setXYZ(i, w[0] * tint, w[1] * tint, w[2] * tint);
@@ -391,6 +476,7 @@ export class TokyoChunkManager {
     };
 
     for (const side of [-1, 1]) {
+      const faceYaw = side < 0 ? Math.PI / 2 : -Math.PI / 2;
       let t = rng.range(0, 3);
       while (t < L - 4) {
         const width = area.style === 'towers' ? rng.range(14, 26) : rng.range(8, 17);
@@ -400,6 +486,10 @@ export class TokyoChunkManager {
         }
         const depth = rng.range(10, 22);
         const sCenter = s0 + t + width / 2;
+        t += width + rng.range(0.4, 2.8);
+        // お堀側（左）と交差点には手前のビルを建てない
+        if (side < 0 && this.inMoat(sCenter)) continue;
+        if (this.inGap(sCenter - width / 2, sCenter + width / 2)) continue;
         let height = rng.range(hMin, hMax);
         const lowRise = side < 0 && this.inBackdropRange(sCenter);
         if (lowRise) height = rng.range(3.4, 5.5);
@@ -409,30 +499,27 @@ export class TokyoChunkManager {
           const i = slot * PER.vsign + b.v++;
           const y = Math.min(height - 3.5, rng.range(5, 11));
           if (y > 3.5) {
-            _e.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
-            _m.compose(_p.set(side * (BUILD_X - 0.25), y, z(sCenter + rng.range(-width / 3, width / 3))), _q.setFromEuler(_e), _s.set(1, 1, 1));
-            this.vsigns.setMatrixAt(i, _m);
+            this.vsigns.setMatrixAt(i, this.placeMatrix(sCenter + rng.range(-width / 3, width / 3), side * (BUILD_X - 0.25), y, faceYaw, 1, 1, 1));
             this.vsigns.geometry.attributes.iUv.setXY(i, rng.int(0, 7) / 8, 0);
           }
         }
         if (!lowRise && rng.chance(area.neon * 0.55) && b.h < PER.hsign) {
           const i = slot * PER.hsign + b.h++;
           const y = Math.min(height - 2, rng.range(3.6, 8.5));
-          _e.set(0, side < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
-          _m.compose(_p.set(side * (BUILD_X - 0.12), y, z(sCenter)), _q.setFromEuler(_e), _s.set(1, 1, 1));
-          this.hsigns.setMatrixAt(i, _m);
+          this.hsigns.setMatrixAt(i, this.placeMatrix(sCenter, side * (BUILD_X - 0.12), y, faceYaw, 1, 1, 1));
           const cell = rng.int(0, 15);
           this.hsigns.geometry.attributes.iUv.setXY(i, (cell % 4) / 4, 1 - (Math.floor(cell / 4) + 1) / 4);
         }
-        t += width + rng.range(0.4, 2.8);
       }
       // 奥の高層ビル
       const backCount = area.style === 'towers' ? 5 : 3;
       for (let k = 0; k < backCount; k++) {
         const sCenter = s0 + rng.range(8, L - 8);
-        if (side < 0 && this.inBackdropRange(sCenter)) continue;
         const w = rng.range(16, 30);
-        putBuilding(side * rng.range(48, 80), sCenter, w, rng.range(hMax * 0.8, hMax * 1.6), w, rng.chance(0.3));
+        const x = side * rng.range(52, 84);
+        const h = rng.range(hMax * 0.8, hMax * 1.6);
+        if (side < 0 && this.inBackdropRange(sCenter)) continue;
+        putBuilding(x, sCenter, w, h, w, rng.chance(0.3));
       }
     }
 
@@ -441,11 +528,9 @@ export class TokyoChunkManager {
       for (const side of [-1, 1]) {
         if (b.lamp >= PER.lamp) break;
         const i = slot * PER.lamp + b.lamp++;
-        _e.set(0, 0, 0);
-        _m.compose(_p.set(side * (HALF + 0.9), 0, z(s0 + 15 + k * 30)), _q.identity(), _s.set(1, 1, 1));
-        this.poles.setMatrixAt(i, _m);
-        _m.compose(_p.set(side * (HALF + 0.3), 0, z(s0 + 15 + k * 30)), _q.identity(), _s.set(1, 1, 1));
-        this.lampHeads.setMatrixAt(i, _m);
+        const s = s0 + 15 + k * 30;
+        this.poles.setMatrixAt(i, this.placeMatrix(s, side * (HALF + 0.9), 0, 0, 1, 1, 1));
+        this.lampHeads.setMatrixAt(i, this.placeMatrix(s, side * (HALF + 0.3), 0, 0, 1, 1, 1));
       }
     }
 
@@ -457,20 +542,27 @@ export class TokyoChunkManager {
     this.hsigns.geometry.attributes.iUv.needsUpdate = true;
   }
 
+  placeGroup(group, s) {
+    const f = this.path.sample(s);
+    group.position.set(f.x, 0, f.z);
+    group.rotation.y = f.theta;
+  }
+
   updateLandmarks(playerS, dt, sideBlend) {
     const buildAhead = 420;
     const dropBehind = 160;
     for (const lm of this.landmarks) {
       const rel = lm.s - playerS;
       let active = rel < buildAhead && rel > -dropBehind;
-      if (lm.def.type === 'backdrop2d') {
+      if (lm.def.until !== undefined) {
         const until = this.distance.kmToUnits(lm.def.until);
-        active = playerS > lm.s - 200 && playerS < until + 100;
+        active = playerS > lm.s - buildAhead && playerS < until + dropBehind;
       }
+      if (lm.def.type === 'moat') active = false; // お堀はリボンで描く
       if (active && !lm.built) {
         lm.built = buildLandmark(lm.def);
         if (lm.built) {
-          lm.built.group.position.z = this.distance.worldZ(lm.s);
+          this.placeGroup(lm.built.group, lm.s);
           this.scene.add(lm.built.group);
         }
       } else if (!active && lm.built) {
@@ -481,7 +573,7 @@ export class TokyoChunkManager {
       if (lm.built) {
         lm.built.update?.(dt);
         if (lm.built.followsPlayer) {
-          lm.built.group.position.z = this.distance.worldZ(playerS);
+          this.placeGroup(lm.built.group, playerS);
           lm.built.setOpacity?.(smoothstep(0.35, 0.95, sideBlend));
         }
       }
@@ -490,5 +582,13 @@ export class TokyoChunkManager {
 
   getLandmark(type) {
     return this.landmarks.find((l) => l.def.type === type)?.built ?? null;
+  }
+
+  getLandmarkById(id) {
+    return this.landmarks.find((l) => l.def.id === id)?.built ?? null;
+  }
+
+  landmarkS(idOrType) {
+    return this.landmarks.find((l) => l.def.id === idOrType || l.def.type === idOrType)?.s ?? null;
   }
 }

@@ -75,7 +75,7 @@ const builders = {
 
   goalArch() {
     const g = gantry(halfRoad * 2 + 2.4, 7.5, 3.0);
-    g.add(bannerPlane(makeBannerTexture(['FINISH', '仮ゴール ─ VERTICAL SLICE 3.000km'], { accent: '#ffd23f' }), 16.5, 2.7, 8.8, 1.7));
+    g.add(bannerPlane(makeBannerTexture(['FINISH', '仮ゴール ─ 飯田橋 5.000km'], { accent: '#ffd23f' }), 16.5, 2.7, 8.8, 1.7));
     const lineMat = new THREE.MeshBasicMaterial({ map: makeFinishLineTexture() });
     const line = new THREE.Mesh(new THREE.PlaneGeometry(halfRoad * 2, 1.2), lineMat);
     line.rotation.x = -Math.PI / 2;
@@ -134,11 +134,64 @@ const builders = {
     const b = new THREE.Mesh(new THREE.BoxGeometry(14, 34, 30), new THREE.MeshLambertMaterial({ color: 0x1b1a24 }));
     b.position.set(side * 19.5, 17, 0);
     g.add(b);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(26, 13), glowBasic(makeVisionTexture(lm.text ?? '走れば\nなんとかなる。'), 1.3));
+    const screenMat = glowBasic(makeVisionTexture(lm.text ?? '走れば\nなんとかなる。'), 1.3);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(26, 13), screenMat);
     screen.position.set(side * 12.4, 18, 0);
     screen.rotation.y = side > 0 ? -Math.PI / 2 : Math.PI / 2;
     g.add(screen);
-    return { group: g };
+    return {
+      group: g,
+      side,
+      // 柴犬が画面から出ていったあと
+      setAway() {
+        screenMat.map.dispose();
+        screenMat.map = makeVisionTexture('柴犬は\nただいま外出中', { away: true });
+        screenMat.needsUpdate = true;
+      },
+    };
+  },
+
+  // 交差点の信号（停止線 = z 0）。GagDirector が setLight で点灯を切り替える
+  signal() {
+    const g = new THREE.Group();
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(130, 12), new THREE.MeshLambertMaterial({ color: 0x1b1c22 }));
+    road.rotation.x = -Math.PI / 2;
+    road.position.set(0, 0.015, -11);
+    g.add(road);
+    const stop = new THREE.Mesh(new THREE.PlaneGeometry(halfRoad * 2, 0.5), new THREE.MeshBasicMaterial({ color: 0xf0f0f0 }));
+    stop.rotation.x = -Math.PI / 2;
+    stop.position.set(0, 0.03, 0);
+    g.add(stop);
+    const tomare = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 3),
+      new THREE.MeshBasicMaterial({ map: makeBannerTexture(['止まれ'], { width: 512, height: 256, bg: 'rgba(0,0,0,0)', accent: 'rgba(0,0,0,0)', fg: '#f4f4f4' }), transparent: true })
+    );
+    tomare.rotation.x = -Math.PI / 2;
+    tomare.position.set(0, 0.03, 4.5);
+    g.add(tomare);
+
+    const frame = gantry(halfRoad * 2 + 1.6, 6.4, 0.5);
+    frame.position.z = -3;
+    g.add(frame);
+    const housing = new THREE.Mesh(new THREE.BoxGeometry(5.4, 1.9, 0.9), darkSteel);
+    housing.position.set(0, 8.0, -3);
+    g.add(housing);
+    const colors = { green: 0x19e07a, yellow: 0xffc21a, red: 0xff2a2a };
+    const lamps = {};
+    ['green', 'yellow', 'red'].forEach((name, i) => {
+      const mat = new THREE.MeshBasicMaterial({ color: colors[name] });
+      const lamp = new THREE.Mesh(new THREE.CircleGeometry(0.72, 20), mat);
+      lamp.position.set(-1.75 + i * 1.75, 8.0, -2.54);
+      g.add(lamp);
+      lamps[name] = mat;
+    });
+    const set = (state) => {
+      for (const [name, mat] of Object.entries(lamps)) {
+        mat.color.setHex(colors[name]).multiplyScalar(name === state ? 2.4 : 0.12);
+      }
+    };
+    set('green');
+    return { group: g, setLight: set };
   },
 
   overpass(lm) {

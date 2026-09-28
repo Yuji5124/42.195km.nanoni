@@ -18,7 +18,7 @@ export class Input {
   constructor(root) {
     this.down = new Set();
     this.pressedThisFrame = new Set();
-    this.touch = { left: false, right: false, up: false, dash: false };
+    this.touch = { left: false, right: false, up: false, down: false, dash: false };
     this.touchPressed = new Set();
 
     window.addEventListener('keydown', (e) => {
@@ -55,6 +55,7 @@ export class Input {
     if (action === 'right' && this.touch.right) return true;
     if (action === 'dash' && this.touch.dash) return true;
     if (action === 'jump' && this.touch.up) return true;
+    if (action === 'down' && this.touch.down) return true;
     return KEYMAP[action].some((c) => this.down.has(c));
   }
 

@@ -206,6 +206,63 @@ export class AudioManager {
     const t = this.ctx.currentTime;
     for (let i = 0; i < 5; i++) this.tone(200 + Math.random() * 1600, 0.04, { type: 'square', vol: 0.035, at: t + i * 0.035 });
   }
+  // ---- 動物・ギャグ
+  meow() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(620, 0.12, { type: 'triangle', slideTo: 980, vol: 0.07, at: t });
+    this.tone(980, 0.22, { type: 'triangle', slideTo: 540, vol: 0.07, at: t + 0.12 });
+  }
+  bark(pitch = 1) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 2; i++) {
+      this.tone(420 * pitch, 0.09, { type: 'square', slideTo: 260 * pitch, vol: 0.05, at: t + i * 0.16, cutoff: 1800 });
+      this.noiseHit(0.07, { freq: 900 * pitch, q: 2, vol: 0.05, at: t + i * 0.16 });
+    }
+  }
+  bigBark() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(160, 0.45, { type: 'sawtooth', slideTo: 70, vol: 0.18, at: t, cutoff: 700 });
+    this.noiseHit(0.5, { type: 'lowpass', freq: 500, vol: 0.2, at: t });
+  }
+  thump() {
+    this.tone(70, 0.25, { type: 'sine', slideTo: 35, vol: 0.25 });
+  }
+  whistle() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 6; i++) this.tone(i % 2 ? 2700 : 3000, 0.07, { type: 'sine', vol: 0.06, at: t + i * 0.07 });
+  }
+  boo() {
+    this.noiseHit(1.3, { type: 'lowpass', freq: 420, sweepTo: 260, vol: 0.28, attack: 0.15 });
+  }
+  applause() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 40; i++) {
+      this.noiseHit(0.03, { type: 'highpass', freq: 1500 + Math.random() * 900, vol: 0.03 + Math.random() * 0.04, at: t + Math.random() * 1.4, pan: Math.random() * 1.6 - 0.8 });
+    }
+    this.cheerSwell(1.5);
+  }
+  horn() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [440, 554].forEach((f) => this.tone(f, 0.9, { type: 'sawtooth', vol: 0.05, at: t, attack: 0.05, cutoff: 1600 }));
+  }
+  carHorn() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    [350, 440].forEach((f) => this.tone(f, 0.4, { type: 'square', vol: 0.05, at: t, cutoff: 1400 }));
+  }
+  signalChime() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.tone(1200, 0.12, { type: 'sine', vol: 0.06, at: t });
+    this.tone(900, 0.2, { type: 'sine', vol: 0.06, at: t + 0.14 });
+  }
+
   countdown(n) {
     this.tone(n > 0 ? 880 : 1760, n > 0 ? 0.15 : 0.5, { type: 'square', vol: 0.07, cutoff: 3000 });
   }

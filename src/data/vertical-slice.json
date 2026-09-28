@@ -1,15 +1,29 @@
 {
-  "name": "VERTICAL SLICE 0–3km",
-  "goalKm": 3.0,
+  "name": "VERTICAL SLICE 0–5km",
+  "goalKm": 5.0,
+  "_curves": "turnDeg > 0 = 左カーブ。横スクロール区間（2.2〜2.7km）・信号（4.25km）・ゴール前は直線に保つ",
+  "curves": [
+    { "fromKm": 0.30, "toKm": 0.60, "turnDeg": -30 },
+    { "fromKm": 0.85, "toKm": 1.10, "turnDeg": 35 },
+    { "fromKm": 1.30, "toKm": 1.50, "turnDeg": 25 },
+    { "fromKm": 1.70, "toKm": 2.00, "turnDeg": -45 },
+    { "fromKm": 2.75, "toKm": 3.05, "turnDeg": 40 },
+    { "fromKm": 3.20, "toKm": 3.45, "turnDeg": -30 },
+    { "fromKm": 3.55, "toKm": 3.80, "turnDeg": 35 },
+    { "fromKm": 4.40, "toKm": 4.58, "turnDeg": -25 },
+    { "fromKm": 4.62, "toKm": 4.80, "turnDeg": 30 }
+  ],
   "defaults": {
     "camera": "NORMAL",
     "fx": "none",
     "music": "normal",
     "crowd": 0.45,
     "obstacles": 0.0,
+    "cats": 0.0,
     "cheerMul": 1.0,
     "rules": {},
     "pattern": null,
+    "world": "normal",
     "calm": false
   },
   "events": [
@@ -41,15 +55,61 @@
       "commentary": "えっ、カメラが…真横!? これ、マラソン中継ですよね!?"
     },
     {
-      "km": 2.7, "id": "return3d", "camera": "NORMAL", "fx": "none", "music": "final",
+      "km": 2.7, "id": "return3d", "camera": "NORMAL", "fx": "none", "music": "normal",
       "obstacles": 0.35, "pattern": null, "rules": {},
-      "caption": { "main": "……戻った。", "sub": "ゴールまで 300m" }
+      "caption": { "main": "……戻った。", "sub": "でも、まだ 2.3km ある" }
     },
     {
-      "km": 2.86, "id": "final_straight", "obstacles": 0.0, "crowd": 1.6, "calm": true,
-      "commentary": "最後の直線！ 観客の声援が最高潮です！"
+      "km": 2.9, "id": "cats_on", "cats": 0.4, "obstacles": 0.3,
+      "caption": { "main": "マラソン、なのに。", "sub": "猫が横切る" },
+      "hint": "猫はジャンプで飛び越えられる（NYAN JUMP）",
+      "commentary": "道路に…猫!? 皆さん、猫にはお気をつけください！"
     },
-    { "km": 3.0, "id": "goal", "goal": true }
+    {
+      "km": 3.12, "id": "train_race", "gag": "trainRace", "music": "final",
+      "obstacles": 0.2, "cats": 0.15,
+      "caption": { "main": "マラソン、なのに。", "sub": "電車と競争" },
+      "hint": "SHIFT ダッシュで電車を追い抜け！",
+      "hintTouch": "DASH で電車を追い抜け！",
+      "commentary": "外濠沿いで…総武線と並走しています！ 勝てるのか!?"
+    },
+    {
+      "km": 3.92, "id": "dog_pacer", "gag": "dogPacer", "music": "normal",
+      "obstacles": 0.3, "cats": 0.2,
+      "caption": { "main": "マラソン、なのに。", "sub": "柴犬が伴走" },
+      "hint": "柴犬のそばを走ると WAN! ボーナス",
+      "commentary": "犬が…ついてきてる!? しかも3匹！"
+    },
+    {
+      "km": 4.05, "id": "signal", "gag": "signal", "obstacles": 0.0, "cats": 0.0,
+      "commentary": "この先、飯田橋の交差点です！ …え、信号!?"
+    },
+    {
+      "km": 4.36, "id": "cat_stampede", "pattern": "catStampede", "obstacles": 0.0,
+      "caption": { "main": "マラソン、なのに。", "sub": "猫の大移動" },
+      "hint": "ジャンプで飛び越えろ！",
+      "commentary": "猫です！ 猫の大群が横切ります！ なぜ今!?"
+    },
+    {
+      "km": 4.5, "id": "loading", "pattern": null, "world": "wireframe", "fx": "glitch", "music": "chip",
+      "obstacles": 0.2,
+      "caption": { "main": "東京、読み込み中…", "sub": "NOW LOADING TOKYO 42%" },
+      "commentary": "あれ？ 街が…ポリゴンむき出しに!? 東京、まだ読み込み中です！"
+    },
+    {
+      "km": 4.62, "id": "loaded", "world": "normal", "fx": "none", "music": "final",
+      "commentary": "…読み込み完了！ 東京、戻りました！"
+    },
+    {
+      "km": 4.63, "id": "giant_dog", "gag": "giantDog",
+      "caption": { "main": "マラソン、なのに。", "sub": "巨大柴犬" },
+      "commentary": "あっ！ ビジョンの柴犬が…出てきた!? 大きい！ 大きすぎる！"
+    },
+    {
+      "km": 4.86, "id": "final_straight", "obstacles": 0.0, "cats": 0.0, "crowd": 1.6, "calm": true,
+      "commentary": "最後の直線！ 飯田橋のゴールが見えてきました！"
+    },
+    { "km": 5.0, "id": "goal", "goal": true }
   ],
   "landmarks": [
     { "km": 0.0,  "type": "startArch" },
@@ -61,6 +121,13 @@
     { "km": 1.95, "type": "roadSign", "lines": ["新宿三丁目", "Shinjuku 3", "市ヶ谷", "Ichigaya"] },
     { "km": 2.0,  "type": "kmArch", "label": "2 km" },
     { "km": 2.2,  "type": "backdrop2d", "until": 2.7 },
-    { "km": 3.0,  "type": "goalArch" }
+    { "km": 2.95, "type": "roadSign", "lines": ["市ヶ谷", "Ichigaya", "飯田橋", "Iidabashi"] },
+    { "km": 3.0,  "type": "kmArch", "label": "3 km" },
+    { "km": 3.1,  "type": "moat", "until": 3.95 },
+    { "km": 4.0,  "type": "kmArch", "label": "4 km" },
+    { "km": 4.25, "type": "signal" },
+    { "km": 4.47, "type": "roadSign", "lines": ["飯田橋", "Iidabashi", "水道橋", "Suidobashi"] },
+    { "km": 4.78, "type": "vision", "id": "dogVision", "side": -1, "text": "走れば\nなんとかなる。" },
+    { "km": 5.0,  "type": "goalArch" }
   ]
 }

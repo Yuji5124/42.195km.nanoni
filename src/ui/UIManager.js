@@ -101,7 +101,8 @@ export class UIManager {
     const d = document.createElement('div');
     d.className = `popup${big ? ' big' : ''}`;
     if (color) d.style.color = color;
-    d.innerHTML = `<span>${label}</span>${amount ? `<b>+${amount}</b>` : ''}`;
+    d.innerHTML = `<span>${label}</span>${amount ? `<b>${amount > 0 ? '+' : ''}${amount}</b>` : ''}`;
+    if (amount < 0) d.classList.add('minus');
     this.el.popups.appendChild(d);
     while (this.el.popups.children.length > 4) this.el.popups.firstChild.remove();
     setTimeout(() => d.remove(), 1300);
@@ -167,7 +168,7 @@ export class UIManager {
   }
 
   showResult(stats) {
-    const rank = stats.cheer >= 12000 ? 'S' : stats.cheer >= 8000 ? 'A' : stats.cheer >= 4500 ? 'B' : 'C';
+    const rank = stats.cheer >= 17000 ? 'S' : stats.cheer >= 11000 ? 'A' : stats.cheer >= 6500 ? 'B' : 'C';
     const titles = {
       S: '新宿を揺らした主役',
       A: '沿道のアイドル',
