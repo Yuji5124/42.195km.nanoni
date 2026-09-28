@@ -37,6 +37,7 @@
       "rules": { "lane": 4.0, "aiMaxX": 2.4, "screenControls": true },
       "caption": { "main": "マラソン、なのに。", "sub": "横スクロール" },
       "hint": "→ 加速　← 減速　SPACE ジャンプ",
+      "hintTouch": "▶ 加速　◀ 減速　JUMP ジャンプ",
       "commentary": "えっ、カメラが…真横!? これ、マラソン中継ですよね!?"
     },
     {

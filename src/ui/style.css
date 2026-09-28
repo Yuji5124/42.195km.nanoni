@@ -700,19 +700,32 @@ body[data-mode='TV_BROADCAST'] .hud-bottom {
 }
 
 /* ===== スマホ ===== */
+/* 縦長スマホ: POSITION と DISTANCE を上段、CHEER をその下の中央へ */
 @media (max-width: 640px) {
-  .hud-pos .value b { font-size: 38px; }
-  .hud-cheer .value { font-size: 28px; }
-  .hud-dist .value b { font-size: 28px; }
-  .hud-dist .value small { font-size: 12px; }
-  .hud-time { font-size: 15px; }
+  .label { font-size: 10px; }
+  .hud-pos { top: 10px; left: 14px; }
+  .hud-pos .value b { font-size: 34px; }
+  .hud-pos .value small { font-size: 15px; }
+  .hud-dist { top: 10px; right: 14px; width: 52vw; }
+  .hud-dist .value b { font-size: 26px; }
+  .hud-dist .value small { font-size: 11px; }
+  .hud-time { font-size: 14px; margin-top: 4px; }
+  .hud-cheer { top: 92px; }
+  .hud-cheer .value { font-size: 26px; }
+  .combo { font-size: 13px; }
   .speed { font-size: 22px; min-width: 90px; }
-  .area { top: 74px; font-size: 14px; }
-  .tv .live { top: 104px; }
-  .tv .tv-title { top: 136px; }
-  .hud-bottom { bottom: 12px; }
+  .area { top: 62px; left: 14px; font-size: 12px; }
+  .cam-tag { top: 150px; font-size: 11px; }
+  .tv .live { top: 150px; left: 14px; font-size: 12px; }
+  .tv .tv-title { display: none; }
+  .tv .lower-third { bottom: 180px; font-size: 13px; }
+  .hud-bottom { bottom: 12px; gap: 12px; }
   .controls { font-size: 12px; }
   .result-body .grid { grid-template-columns: 1fr; }
-  .hint { font-size: 14px; bottom: 170px; }
-  .commentary { bottom: 200px; }
+  .hint { font-size: 13px; bottom: 170px; max-width: 94vw; white-space: normal; text-align: center; }
+  .commentary { bottom: 240px; }
+  .caption .main { font-size: clamp(28px, 9vw, 44px); }
+  .caption .sub { font-size: 15px; }
+  #popups { bottom: 40%; }
+  .popup { font-size: 16px; }
 }

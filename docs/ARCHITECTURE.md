@@ -118,6 +118,28 @@ src/
 **リザルト**: TIME / POSITION / CHEER / MAX SPEED / OVERTAKES / FALLS / CHEER COMBO / CAMERA CHANGES。
 盛り上げ度（S〜C）は順位ではなく CHEER で決まる。
 
+## 検証（ヘッドレス Chromium / SwiftShader）
+
+`npm run build` 後に `vite preview` を立て、Playwright で確認した内容。
+
+| 確認項目 | 結果 |
+| --- | --- |
+| ビルド | `vite build` 成功（依存: three 0.186 / vite 8） |
+| 0〜3km 通しプレイ（`?auto&fast=4`） | START → NORMAL → TV_BROADCAST → NORMAL → SIDE_2D → NORMAL → GOAL → リザルトまで到達。pageerror なし |
+| 転倒 → 起き上がり | 転倒 → COMEBACK! の CHEER → 復帰。エラーなし |
+| 描画負荷 | draw call 約 30〜60、約 21 万ポリゴン（観客は低ポリ版の人型） |
+| スマホ（iPhone 13 相当・縦） | HUD の重なりなし、タッチボタン表示、縦画面では FOV を自動で広げる |
+
+ソフトウェアレンダリングでは 20fps 程度のため自動で品質が下がる（実機 GPU では通常 60fps を想定）。
+サンドボックスでは Google Fonts が証明書エラーで読めず OS フォントにフォールバックしたが、動作に影響はない。
+
+### バランス（自動操縦での目安）
+
+- 自動操縦（そこそこの腕前）で 20〜40 位、CHEER 6,000〜7,000（B）
+- 先頭集団は約 18 u/s。プレイヤーが持続できる平均速度（巡航・ペースアップ・ダッシュの配分）とほぼ互角で、
+  **声援の後押し（段階 × 0.22）やシューズで先頭に届く**設計。1 位になると CHEER が毎秒 55 入る
+- 盛り上げ度: S ≥ 12,000 / A ≥ 8,000 / B ≥ 4,500
+
 ## 次の実装候補
 
 1. 実プレイでの難易度調整（AI 速度・障害物密度・スタミナ）

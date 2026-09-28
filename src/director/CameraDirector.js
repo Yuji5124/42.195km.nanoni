@@ -252,7 +252,9 @@ export class CameraDirector {
     cam.up.set(0, 1, 0);
     cam.lookAt(out.look);
     if (out.roll) cam.rotateZ(out.roll);
-    cam.fov = clamp(out.fov + this.fovKick, 5, 110);
+    // 縦長画面では横方向の視野が狭くなりすぎるので、縦 FOV を広げて補う
+    const portrait = cam.aspect < 1 ? Math.min(1.45, 0.75 / cam.aspect) : 1;
+    cam.fov = clamp((out.fov + this.fovKick) * portrait, 5, 115);
     cam.near = out.near;
     cam.far = out.near + 1400;
     cam.updateProjectionMatrix();

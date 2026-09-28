@@ -217,7 +217,8 @@ export class Game {
       if (silent) return;
       if (event.caption) ui.caption(event.caption.main, event.caption.sub);
       if (event.commentary) this.say(event.commentary, true);
-      if (event.hint) ui.hint(event.hint, 5000);
+      const hint = this.input.isTouch ? event.hintTouch ?? event.hint : event.hint;
+      if (hint) ui.hint(hint, 5000);
       if (event.id === 'final_straight') {
         this.course.clearAhead(player.s + 4);
         ui.fever('LAST 140m');
@@ -241,7 +242,7 @@ export class Game {
       audio.setMusic(this.events.current.music);
       cam.setMode(MODES.NORMAL, { transition: 1.6 });
       fx.flash(0.25);
-      ui.hint('←→ 移動　SPACE ジャンプ　SHIFT ダッシュ　W ペースアップ', 5000);
+      ui.hint(this.input.isTouch ? '◀▶ 移動　JUMP ジャンプ　DASH ダッシュ' : '←→ 移動　SPACE ジャンプ　SHIFT ダッシュ　W ペースアップ', 5000);
       this.say('スタートしました！ 42.195km、なのに…の旅が始まります！', true);
       const warp = parseFloat(this.params.get('warp'));
       if (warp > 0) this.warpTo(warp);
