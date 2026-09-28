@@ -58,6 +58,9 @@ export class CameraDirector {
     this.sideBlend = 0;
     this.shotLabel = '';
     this.lean = 0;
+    this.cctv = null;
+    this.cctvCount = 0;
+    this.extraRoll = 0;
   }
 
   setMode(mode, { transition = 1.2, cut = false } = {}) {
@@ -72,6 +75,7 @@ export class CameraDirector {
       this.tvIndex = 0;
       this.tvTime = 0;
     }
+    if (mode === MODES.CCTV) this.cctv = null;
     if (mode !== MODES.TITLE && mode !== MODES.START) this.changes++;
     this.bus.emit('cameraMode', { mode, prev: this.prevMode });
   }
@@ -142,6 +146,16 @@ export class CameraDirector {
         out.roll = this.lean * 2.4;
         break;
       }
+      case MODES.CCTV: {
+        // 電柱・ビルの防犯カメラ: 固定位置から首だけ振ってプレイヤーを追う
+        const c = this.cctv ?? { s: p.s + 20, x: 9, y: 7.5 };
+        W(c.s, c.x, c.y, out.pos);
+        W(p.s, p.x, 1.0, out.look);
+        out.fov = 72;
+        out.fogNear = 60;
+        out.fogFar = 360;
+        break;
+      }
       case MODES.GOAL: {
         // ゴール正面から迎えるカメラ。ゴール後はプレイヤーの前を後退しながら映し続ける
         W(Math.max(this.goalS + 11, p.s + 7.5), 2.8 + Math.sin(t * 0.6) * 1.5, 1.8, out.pos);
@@ -208,6 +222,18 @@ export class CameraDirector {
     this.followY = damp(this.followY, p.y, 5, dt);
     // カーブで少しだけ内側に傾ける（スピード感）
     this.lean = damp(this.lean, clamp(this.path.kappa(p.s) * p.speed * 2.2, -0.07, 0.07), 3, dt);
+
+    // 監視カメラ: プレイヤーが通り過ぎたら次のカメラへカット
+    if (this.mode === MODES.CCTV && (!this.cctv || p.s > this.cctv.s + 20)) {
+      this.cctvCount++;
+      const side = this.cctvCount % 2 ? 9.5 : -9.5;
+      this.cctv = { s: p.s + 22, x: side, y: 7 + (this.cctvCount % 3) * 1.5 };
+      if (this.cctvCount > 1) this.changes++;
+      this.bus.emit('cameraCut', { shot: 'CCTV', label: `CAM ${String(this.cctvCount).padStart(2, '0')}`, cctv: this.cctvCount });
+    }
+
+    // 重力シフト: 画面ごと横倒し・天地逆転（ctx.roll は度）
+    this.extraRoll = damp(this.extraRoll, THREE.MathUtils.degToRad(ctx.roll ?? 0), 1.6, dt);
 
     // TV ショットの自動カット
     if (this.mode === MODES.TV_BROADCAST) {
@@ -276,7 +302,7 @@ export class CameraDirector {
     cam.position.copy(out.pos);
     cam.up.set(0, 1, 0);
     cam.lookAt(out.look);
-    if (out.roll) cam.rotateZ(out.roll);
+    if (out.roll || this.extraRoll) cam.rotateZ(out.roll + this.extraRoll);
     // 縦長画面では横方向の視野が狭くなりすぎるので、縦 FOV を広げて補う
     const portrait = cam.aspect < 1 ? Math.min(1.45, 0.75 / cam.aspect) : 1;
     cam.fov = clamp((out.fov + this.fovKick) * portrait, 5, 115);

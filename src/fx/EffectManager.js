@@ -146,6 +146,9 @@ export class EffectManager {
     u.uGlitch.value = this.glitch;
     u.uFlash.value = this.flashAmt;
     u.uMirror.value = this.current.mirror;
+    u.uMono.value = this.current.mono;
+    u.uTint.value = this.current.tint;
+    u.uFisheye.value = this.current.fisheye;
     const speedTarget = p.dashing || p.boostTimer > 0 ? 1 : 0;
     this.speedFx = damp(this.speedFx ?? 0, speedTarget, 5, dt);
     u.uSpeed.value = Math.max(this.speedFx, this.current.speed) * (this.current.pixel > 1.5 ? 0 : 1);

@@ -171,7 +171,9 @@ export class RunnerController {
       this.bus.emit('playerJump', {});
     }
     if (!this.grounded) {
-      const g = !jumpHeld && this.vy > 0 ? P.gravity * 2.1 : P.gravity;
+      // 重力シフト / 雲の上: 低重力でふわっと高く飛ぶ
+      const gScale = rules.lowGravity ? 0.4 : 1;
+      const g = (!jumpHeld && this.vy > 0 ? P.gravity * 2.1 : P.gravity) * gScale;
       this.vy -= g * dt;
       this.y += this.vy * dt;
       this.airTime += dt;

@@ -40,6 +40,10 @@ const LINES = {
 };
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+// 夜の東京 ↔ 雲の上（夕方の空）
+const SKY_NIGHT = { top: new THREE.Color(0x07051a), mid: new THREE.Color(0x2a1846), horizon: new THREE.Color(0xc0406e), fog: new THREE.Color(0x2a1846) };
+const SKY_DAY = { top: new THREE.Color(0x2e6fd8), mid: new THREE.Color(0x8fc4ff), horizon: new THREE.Color(0xffd9a8), fog: new THREE.Color(0xcfe4ff) };
+
 export class Game {
   constructor(canvas) {
     this.canvas = canvas;
@@ -72,7 +76,8 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
     this.buildSky();
 
-    scene.add(new THREE.HemisphereLight(0x9fb4ff, 0x2a1c3a, 1.0));
+    this.hemi = new THREE.HemisphereLight(0x9fb4ff, 0x2a1c3a, 1.0);
+    scene.add(this.hemi);
     const moon = new THREE.DirectionalLight(0xffd6f0, 1.1);
     moon.position.set(-40, 80, 30);
     scene.add(moon);
@@ -246,10 +251,14 @@ export class Game {
       }
     });
 
-    bus.on('cameraMode', ({ mode }) => ui.setModeClass(mode));
-    bus.on('cameraCut', ({ label }) => {
-      ui.camTag(`CAM: ${label}`);
-      fx.glitchBurst(0.2);
+    bus.on('cameraMode', ({ mode }) => {
+      ui.setModeClass(mode);
+      ui.setCCTV(mode === MODES.CCTV);
+    });
+    bus.on('cameraCut', ({ label, cctv }) => {
+      if (cctv) ui.cctvCam(label);
+      else ui.camTag(`CAM: ${label}`);
+      fx.glitchBurst(cctv ? 0.35 : 0.2);
     });
 
     bus.on('countdown', ({ n }) => {
@@ -620,7 +629,8 @@ export class Game {
     });
 
     this.crowd.update(player.s, dt, cheer.excitement);
-    this.cameraDirector.update(dt, { player, time: this.time });
+    this.cameraDirector.update(dt, { player, time: this.time, roll: running ? state.roll ?? 0 : 0 });
+    this.ui.cctvTime(this.distance.raceTime);
     const camMode = this.cameraDirector.mode;
     this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D || camMode === MODES.TOP_DOWN);
     this.path.toWorld(player.s, player.x, player.y + 2.7 + Math.sin(this.time * 6) * 0.1, this.marker.position);
@@ -630,6 +640,16 @@ export class Game {
     const camDist = Math.hypot(cp.x - pw.x, cp.y - (pw.y + 1), cp.z - pw.z);
     this.ai.material.userData.uniforms.uNearFade.value = camDist < 14 ? camDist - 1.2 : 0;
     this.chunks.update(player.s, dt, this.cameraDirector.sideBlend);
+    const skyAmt = this.chunks.skyAmount(player.s);
+    if (skyAmt !== this.lastSkyAmt) {
+      this.lastSkyAmt = skyAmt;
+      const su = this.sky.material.uniforms;
+      su.uTop.value.copy(SKY_NIGHT.top).lerp(SKY_DAY.top, skyAmt);
+      su.uMid.value.copy(SKY_NIGHT.mid).lerp(SKY_DAY.mid, skyAmt);
+      su.uHorizon.value.copy(SKY_NIGHT.horizon).lerp(SKY_DAY.horizon, skyAmt);
+      this.scene.fog.color.copy(SKY_NIGHT.fog).lerp(SKY_DAY.fog, skyAmt);
+      this.hemi.intensity = 1.0 + skyAmt * 0.9;
+    }
     this.fx.update(dt, { player, tier: cheer.tier, excitement: cheer.excitement, playing });
     this.crowd.setPointScale(this.fx.pointScale);
     this.audio.update(realDt, { excitement: cheer.excitement, playing });

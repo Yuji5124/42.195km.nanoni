@@ -219,6 +219,18 @@ export class CourseManager {
     return this.rng.range(4, 7);
   }
 
+  // 雲の上: 低重力ジャンプで届く高い ♪ のアーチと、ご褒美アイテム
+  spawnSky(s) {
+    const rng = this.rng;
+    const r = rng.next();
+    if (r < 0.65) {
+      const x = rng.range(-5, 5);
+      for (let k = 0; k < 5; k++) this.add('token', s + k * 2.4, x, { y: 2.2 + Math.sin((k / 4) * Math.PI) * 3.2 });
+    } else if (r < 0.85) this.add('shoe', s, rng.range(-LIMIT, LIMIT));
+    else this.add('onigiri', s, rng.range(-LIMIT, LIMIT));
+    return rng.range(16, 26);
+  }
+
   // 3 車線に 1〜2 台。プレイヤーより遅いので追い抜いていく
   spawnTraffic(s) {
     const rng = this.rng;
@@ -270,6 +282,10 @@ export class CourseManager {
       if (pattern === 'side2d') {
         const lane = this.events.paramAt('rules', km)?.lane ?? 4;
         this.nextS += this.spawnSide2D(this.nextS, lane);
+        continue;
+      }
+      if (pattern === 'sky') {
+        this.nextS += this.spawnSky(this.nextS);
         continue;
       }
       if (pattern === 'traffic') {

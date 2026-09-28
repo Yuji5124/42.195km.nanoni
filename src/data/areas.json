@@ -1,5 +1,5 @@
 {
-  "_comment": "42.195km 全体の東京エリア定義。実距離の再現ではなく『東京を走った』と感じられる順序を優先。Vertical Slice では 0〜10km のみ使用。",
+  "_comment": "42.195km 全体の東京エリア定義。実距離の再現ではなく『東京を走った』と感じられる順序を優先。Vertical Slice では 0〜15km のみ使用。",
   "areas": [
     {
       "fromKm": 0.0,
@@ -200,7 +200,73 @@
       ]
     },
     {
-      "fromKm": 13.0,
+      "fromKm": 10.6,
+      "id": "ningyocho",
+      "name": "人形町",
+      "en": "NINGYOCHO",
+      "style": "mixed",
+      "window": [
+        1.0,
+        0.8,
+        0.55
+      ],
+      "facade": [
+        0.15,
+        0.12,
+        0.12
+      ],
+      "neon": 0.4,
+      "height": [
+        12,
+        40
+      ]
+    },
+    {
+      "fromKm": 12.6,
+      "id": "kuramae",
+      "name": "蔵前",
+      "en": "KURAMAE",
+      "style": "mixed",
+      "window": [
+        0.9,
+        0.85,
+        0.75
+      ],
+      "facade": [
+        0.13,
+        0.12,
+        0.14
+      ],
+      "neon": 0.35,
+      "height": [
+        14,
+        42
+      ]
+    },
+    {
+      "fromKm": 13.2,
+      "id": "sky",
+      "name": "雲の上",
+      "en": "ABOVE THE CLOUDS",
+      "style": "mixed",
+      "window": [
+        1,
+        1,
+        1
+      ],
+      "facade": [
+        0.2,
+        0.2,
+        0.2
+      ],
+      "neon": 0,
+      "height": [
+        10,
+        20
+      ]
+    },
+    {
+      "fromKm": 14.15,
       "id": "asakusa",
       "name": "浅草",
       "en": "ASAKUSA",

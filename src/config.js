@@ -69,6 +69,7 @@ export const MODES = {
   SIDE_2D: 'SIDE_2D',
   TOP_DOWN: 'TOP_DOWN',
   RACING: 'RACING',
+  CCTV: 'CCTV',
   START: 'START',
   GOAL: 'GOAL',
   TITLE: 'TITLE',

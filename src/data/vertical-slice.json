@@ -1,6 +1,6 @@
 {
-  "name": "VERTICAL SLICE 0–10km",
-  "goalKm": 10.0,
+  "name": "VERTICAL SLICE 0–15km",
+  "goalKm": 15.0,
   "_curves": "turnDeg > 0 = 左カーブ。横スクロール区間（2.2〜2.7km）・信号（4.25km）・ゴール前は直線に保つ",
   "curves": [
     {
@@ -87,6 +87,41 @@
       "fromKm": 9.2,
       "toKm": 9.5,
       "turnDeg": -40
+    },
+    {
+      "fromKm": 10.2,
+      "toKm": 10.5,
+      "turnDeg": -30
+    },
+    {
+      "fromKm": 10.8,
+      "toKm": 11.1,
+      "turnDeg": 35
+    },
+    {
+      "fromKm": 11.45,
+      "toKm": 11.62,
+      "turnDeg": 20
+    },
+    {
+      "fromKm": 12.5,
+      "toKm": 12.8,
+      "turnDeg": -35
+    },
+    {
+      "fromKm": 13.4,
+      "toKm": 13.7,
+      "turnDeg": 40
+    },
+    {
+      "fromKm": 13.8,
+      "toKm": 14.05,
+      "turnDeg": -40
+    },
+    {
+      "fromKm": 14.28,
+      "toKm": 14.48,
+      "turnDeg": 25
     }
   ],
   "defaults": {
@@ -100,7 +135,8 @@
     "rules": {},
     "pattern": null,
     "world": "normal",
-    "calm": false
+    "calm": false,
+    "roll": 0
   },
   "events": [
     {
@@ -375,15 +411,117 @@
     },
     {
       "km": 9.86,
+      "id": "nihonbashi_pass",
+      "obstacles": 0.3,
+      "cats": 0.1,
+      "crowd": 1.2,
+      "commentary": "日本橋を通過！ …ゴールじゃないんですか!? まだ続きます！"
+    },
+    {
+      "km": 10.3,
+      "id": "cctv",
+      "camera": "CCTV",
+      "fx": "cctv",
+      "music": "title",
+      "obstacles": 0.3,
+      "cats": 0.15,
+      "caption": {
+        "main": "マラソン、なのに。",
+        "sub": "監視カメラ"
+      },
+      "commentary": "ここからの映像は…防犯カメラしかありません！"
+    },
+    {
+      "km": 11.15,
+      "id": "cctv_off",
+      "camera": "NORMAL",
+      "fx": "none",
+      "music": "normal",
+      "commentary": "中継が回復しました！ …さっきのは何だったんでしょう"
+    },
+    {
+      "km": 11.7,
+      "id": "gravity90",
+      "roll": 90,
+      "rules": {
+        "lowGravity": true
+      },
+      "cheerMul": 1.5,
+      "obstacles": 0.4,
+      "cats": 0.1,
+      "music": "tv",
+      "caption": {
+        "main": "マラソン、なのに。",
+        "sub": "重力が横向き"
+      },
+      "hint": "低重力！ ジャンプがふわっと高く飛べる",
+      "commentary": "重力が…横に!? ランナーの皆さん、ビルの壁を走っています！"
+    },
+    {
+      "km": 12.05,
+      "id": "gravity180",
+      "roll": 180,
+      "caption": {
+        "main": "天地逆転。",
+        "sub": "東京が空に落ちていく"
+      },
+      "commentary": "今度は逆さま！ 東京が…頭の上にあります！"
+    },
+    {
+      "km": 12.4,
+      "id": "gravity_back",
+      "roll": 360,
+      "rules": {},
+      "cheerMul": 1.0,
+      "music": "normal",
+      "commentary": "…一回転して戻りました！ 重力、仕事してください！"
+    },
+    {
+      "km": 13.2,
+      "id": "sky",
+      "fx": "sky",
+      "music": "tv",
+      "crowd": 0.0,
+      "obstacles": 0.0,
+      "cats": 0.0,
+      "pattern": "sky",
+      "rules": {
+        "lowGravity": true
+      },
+      "caption": {
+        "main": "マラソン、なのに。",
+        "sub": "雲の上"
+      },
+      "hint": "低重力で空の ♪ を集めろ",
+      "commentary": "雲を抜けました！ 東京の空の上を…走っています!?"
+    },
+    {
+      "km": 14.15,
+      "id": "sky_end",
+      "fx": "none",
+      "music": "final",
+      "crowd": 1.1,
+      "obstacles": 0.3,
+      "cats": 0.15,
+      "pattern": null,
+      "rules": {},
+      "caption": {
+        "main": "……着地。",
+        "sub": "ここは浅草"
+      },
+      "commentary": "地上に戻ってきました！ ここは浅草！ 雷門が見えてきました！"
+    },
+    {
+      "km": 14.86,
       "id": "final_straight",
       "obstacles": 0.0,
       "cats": 0.0,
       "crowd": 1.6,
       "calm": true,
-      "commentary": "最後の直線！ 日本橋のゴールが見えてきました！"
+      "commentary": "最後の直線！ 雷門をくぐって、浅草のゴールへ！"
     },
     {
-      "km": 10.0,
+      "km": 15.0,
       "id": "goal",
       "goal": true
     }
@@ -554,8 +692,62 @@
     },
     {
       "km": 10.0,
+      "type": "kmArch",
+      "label": "10 km"
+    },
+    {
+      "km": 10.55,
+      "type": "roadSign",
+      "lines": [
+        "人形町",
+        "Ningyocho",
+        "浅草",
+        "Asakusa"
+      ]
+    },
+    {
+      "km": 11.0,
+      "type": "kmArch",
+      "label": "11 km"
+    },
+    {
+      "km": 12.0,
+      "type": "kmArch",
+      "label": "12 km"
+    },
+    {
+      "km": 12.65,
+      "type": "roadSign",
+      "lines": [
+        "蔵前",
+        "Kuramae",
+        "浅草",
+        "Asakusa"
+      ]
+    },
+    {
+      "km": 13.0,
+      "type": "kmArch",
+      "label": "13 km"
+    },
+    {
+      "km": 13.2,
+      "type": "sky",
+      "until": 14.15
+    },
+    {
+      "km": 14.0,
+      "type": "kmArch",
+      "label": "14 km"
+    },
+    {
+      "km": 14.62,
+      "type": "kaminarimon"
+    },
+    {
+      "km": 15.0,
       "type": "goalArch",
-      "label": "仮ゴール ─ 日本橋 10.000km"
+      "label": "仮ゴール ─ 浅草 15.000km"
     }
   ]
 }

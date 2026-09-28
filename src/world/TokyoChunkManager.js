@@ -167,6 +167,7 @@ export class TokyoChunkManager {
         .map((l) => [distance.kmToUnits(l.km) - pad, distance.kmToUnits(l.until) + pad]);
     this.backdropRanges = range('backdrop2d', 40);
     this.moatRanges = range('moat');
+    this.skyRanges = range('sky');
     // 信号のある交差点は、横切る道路のためにビルを建てない
     // 東京ドームの側は奥のビルを建てない
     this.domeRanges = slice.landmarks
@@ -200,12 +201,20 @@ export class TokyoChunkManager {
       road: new THREE.MeshLambertMaterial({ map: roadTex }),
       sidewalk: new THREE.MeshLambertMaterial({ map: swTex }),
       fence: new THREE.MeshLambertMaterial({ map: fenceTex, side: THREE.DoubleSide, emissive: 0x0a1a55 }),
+      // 雲の上: 光るガラスの道と、ネオンの手すり
+      skyRoad: new THREE.MeshLambertMaterial({ map: roadTex, color: 0xa8d8ff, emissive: 0x1a4a88 }),
+      rail: (() => {
+        const m = new THREE.MeshBasicMaterial({ color: 0x9ff2ff, side: THREE.DoubleSide, transparent: true, opacity: 0.55 });
+        m.color.multiplyScalar(1.4);
+        return m;
+      })(),
       moat: [
         new THREE.MeshPhongMaterial({ color: 0x1d5a8a, emissive: 0x0c2e52, specular: 0x9ab8ff, shininess: 120 }),
         new THREE.MeshLambertMaterial({ color: 0x4a4852, side: THREE.DoubleSide }),
         new THREE.MeshLambertMaterial({ color: 0x5a5c66 }),
       ],
     };
+    this.ribbonMats = mats;
     this.slotMeshes = [];
     for (let slot = 0; slot < SLOTS; slot++) {
       const road = new THREE.Mesh(createRibbonGeometry(1), mats.road);
@@ -230,6 +239,10 @@ export class TokyoChunkManager {
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -1.0;
     this.scene.add(this.ground);
+    this.cloudFloor = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x8a9cc4 }));
+    this.cloudFloor.rotation.x = -Math.PI / 2;
+    this.cloudFloor.visible = false;
+    this.scene.add(this.cloudFloor);
   }
 
   // リボン 1 本分（断面 k の 2 頂点）を書き込む
@@ -277,6 +290,11 @@ export class TokyoChunkManager {
       m.visible = true;
     }
     moat.visible = anyMoat;
+    // 雲の上のチャンク: 歩道なし、道はガラス、柵はネオンの手すり
+    const sky = this.inSky(s0 + L / 2);
+    road.material = sky ? this.ribbonMats.skyRoad : this.ribbonMats.road;
+    fence.material = sky ? this.ribbonMats.rail : this.ribbonMats.fence;
+    sidewalk.visible = !sky;
   }
 
   buildInstanced() {
@@ -389,7 +407,11 @@ export class TokyoChunkManager {
     this.ground.position.set(f.x, -1.0, f.z);
     this.skyline.position.set(f.x, 0, f.z);
     this.skyline.rotation.y = f.theta;
-    this.skyline.visible = sideBlend < 0.5;
+    const skyAmt = this.skyAmount(playerS);
+    this.skyline.visible = sideBlend < 0.5 && skyAmt < 0.5;
+    this.ground.visible = skyAmt < 0.5;
+    this.cloudFloor.visible = skyAmt > 0.01;
+    this.cloudFloor.position.set(f.x, -7, f.z);
 
     // チャンクの確保と再利用
     const first = Math.floor(playerS / L) - CONFIG.chunk.behind;
@@ -420,6 +442,17 @@ export class TokyoChunkManager {
 
   inGap(a, b) {
     return this.gapRanges.some(([g0, g1]) => b > g0 && a < g1);
+  }
+
+  inSky(s) {
+    return this.skyRanges.some(([a, b]) => s >= a && s <= b);
+  }
+
+  // 雲の上へのフェード（0〜1）。空の色・フォグ・照明の切り替えに使う
+  skyAmount(s) {
+    let v = 0;
+    for (const [a, b] of this.skyRanges) v = Math.max(v, smoothstep(a - 40, a + 10, s) * (1 - smoothstep(b - 10, b + 40, s)));
+    return v;
   }
 
   inMoat(s) {
@@ -463,7 +496,7 @@ export class TokyoChunkManager {
     const battr = this.buildings.geometry.attributes;
     const [hMin, hMax] = area.height;
 
-    const cross = idx > 0 && rng.chance(0.45) ? rng.range(28, 92) : null;
+    const cross = idx > 0 && !this.inSky(s0 + L / 2) && rng.chance(0.45) ? rng.range(28, 92) : null;
     if (cross !== null) this.crosswalks.setMatrixAt(slot * PER.cross, this.placeMatrix(s0 + cross, 0, 0, 0, 1, 1, 1));
 
     const putBuilding = (x, sCenter, depth, height, width, neon) => {
@@ -491,7 +524,8 @@ export class TokyoChunkManager {
         const depth = rng.range(10, 22);
         const sCenter = s0 + t + width / 2;
         t += width + rng.range(0.4, 2.8);
-        // お堀側（左）と交差点には手前のビルを建てない
+        // お堀側（左）・交差点・雲の上には手前のビルを建てない
+        if (this.inSky(sCenter)) continue;
         if (side < 0 && this.inMoat(sCenter)) continue;
         if (this.inGap(sCenter - width / 2, sCenter + width / 2)) continue;
         let height = rng.range(hMin, hMax);
@@ -523,6 +557,7 @@ export class TokyoChunkManager {
         const x = side * rng.range(52, 84);
         const h = rng.range(hMax * 0.8, hMax * 1.6);
         if (side < 0 && this.inBackdropRange(sCenter)) continue;
+        if (this.inSky(sCenter)) continue;
         if (this.domeRanges.some((r) => r.side === side && sCenter > r.a && sCenter < r.b)) continue;
         putBuilding(x, sCenter, w, h, w, rng.chance(0.3));
       }
@@ -534,6 +569,7 @@ export class TokyoChunkManager {
         if (b.lamp >= PER.lamp) break;
         const i = slot * PER.lamp + b.lamp++;
         const s = s0 + 15 + k * 30;
+        if (this.inSky(s)) continue;
         this.poles.setMatrixAt(i, this.placeMatrix(s, side * (HALF + 0.9), 0, 0, 1, 1, 1));
         this.lampHeads.setMatrixAt(i, this.placeMatrix(s, side * (HALF + 0.3), 0, 0, 1, 1, 1));
       }
@@ -565,9 +601,9 @@ export class TokyoChunkManager {
       }
       if (lm.def.type === 'moat') active = false; // お堀はリボンで描く
       if (active && !lm.built) {
-        lm.built = buildLandmark(lm.def);
+        lm.built = buildLandmark(lm.def, { path: this.path, distance: this.distance });
         if (lm.built) {
-          this.placeGroup(lm.built.group, lm.s);
+          if (!lm.built.worldSpace) this.placeGroup(lm.built.group, lm.s);
           this.scene.add(lm.built.group);
         }
       } else if (!active && lm.built) {

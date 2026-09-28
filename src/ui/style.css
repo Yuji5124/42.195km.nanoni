@@ -409,6 +409,47 @@ body {
   color: #fff;
 }
 
+/* ===== 監視カメラ ===== */
+.cctv {
+  position: absolute;
+  inset: 0;
+  font-family: 'Courier New', ui-monospace, monospace;
+  color: #d8ffd8;
+  text-shadow: 0 0 4px rgba(120, 255, 140, 0.6);
+}
+.cctv-top {
+  position: absolute;
+  top: 150px;
+  right: 22px;
+  display: flex;
+  gap: 16px;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+}
+.cctv .rec {
+  color: #ff4d4d;
+  animation: blink 0.6s infinite alternate;
+}
+.cctv-stamp {
+  position: absolute;
+  left: 22px;
+  bottom: 96px;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+}
+.cctv-corner {
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-color: rgba(216, 255, 216, 0.75);
+  border-style: solid;
+  border-width: 0;
+}
+.cctv-corner.tl { top: 130px; left: 14px; border-top-width: 3px; border-left-width: 3px; }
+.cctv-corner.tr { top: 130px; right: 14px; border-top-width: 3px; border-right-width: 3px; }
+.cctv-corner.bl { bottom: 70px; left: 14px; border-bottom-width: 3px; border-left-width: 3px; }
+.cctv-corner.br { bottom: 70px; right: 14px; border-bottom-width: 3px; border-right-width: 3px; }
+
 /* ===== カウントダウン ===== */
 .countdown {
   position: absolute;

@@ -141,6 +141,25 @@ export class UIManager {
     this.cache.tvPos = this.cache.tvKm = undefined;
   }
 
+  // 監視カメラの REC 表示。タイムスタンプは東京マラソン当日の朝（スタート 9:10）+ レース時計
+  setCCTV(on) {
+    this.cctvOn = on;
+    $('cctv').classList.toggle('hidden', !on);
+  }
+
+  cctvCam(label) {
+    $('cctvCam').textContent = label;
+  }
+
+  cctvTime(raceTime) {
+    if (!this.cctvOn) return;
+    const t = 9 * 3600 + 10 * 60 + Math.floor(raceTime);
+    const hh = String(Math.floor(t / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
+    const ss = String(t % 60).padStart(2, '0');
+    this.set('cctvStamp', `${hh}${mm}${ss}`, () => ($('cctvStamp').textContent = `2027.03.07 SUN ${hh}:${mm}:${ss}`));
+  }
+
   camTag(text, ms = 1800) {
     const c = this.el.camTag;
     c.textContent = text;
@@ -168,7 +187,7 @@ export class UIManager {
   }
 
   showResult(stats) {
-    const rank = stats.cheer >= 32000 ? 'S' : stats.cheer >= 22000 ? 'A' : stats.cheer >= 13000 ? 'B' : 'C';
+    const rank = stats.cheer >= 42000 ? 'S' : stats.cheer >= 28000 ? 'A' : stats.cheer >= 17000 ? 'B' : 'C';
     const titles = {
       S: '新宿を揺らした主役',
       A: '沿道のアイドル',

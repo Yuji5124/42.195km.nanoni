@@ -151,6 +151,132 @@ const builders = {
     };
   },
 
+  // 雲の上ステージ（ワールド座標で直接組む: コースのカーブに沿って雲と鳥居を並べる）
+  sky(lm, { path, distance }) {
+    const g = new THREE.Group();
+    const a = distance.kmToUnits(lm.km);
+    const b = distance.kmToUnits(lm.until);
+    const v = new THREE.Vector3();
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    // 雲: つぶした多面体を寄せ集める
+    const n = 520;
+    const clouds = new THREE.InstancedMesh(
+      new THREE.IcosahedronGeometry(1, 1),
+      new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x8a96b8 }),
+      n
+    );
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      const s = a - 80 + rnd() * (b - a + 160);
+      const side = rnd() < 0.5 ? -1 : 1;
+      const low = rnd() < 0.72;
+      const lat = side * (low ? 11 + rnd() * 140 : 25 + rnd() * 180);
+      const y = low ? -8 + rnd() * 6 : 12 + rnd() * 30;
+      path.toWorld(s, lat, y, v);
+      const size = low ? 5 + rnd() * 12 : 4 + rnd() * 9;
+      sc.set(size * (1.2 + rnd()), size * (0.35 + rnd() * 0.3), size * (1 + rnd()));
+      m.compose(v, q.identity(), sc);
+      clouds.setMatrixAt(i, m);
+    }
+    g.add(clouds);
+    // 空に浮かぶ鳥居
+    const red = new THREE.MeshLambertMaterial({ color: 0xe8322a, emissive: 0x3a0806 });
+    const black = new THREE.MeshLambertMaterial({ color: 0x151515 });
+    for (let s = a + 50; s < b - 30; s += 75) {
+      const torii = new THREE.Group();
+      for (const x of [-8.6, 8.6]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 9, 10), red);
+        post.position.set(x, 4.5, 0);
+        torii.add(post);
+      }
+      const nuki = new THREE.Mesh(new THREE.BoxGeometry(19, 0.6, 0.6), red);
+      nuki.position.y = 7.2;
+      const kasagi = new THREE.Mesh(new THREE.BoxGeometry(22, 0.8, 1.2), black);
+      kasagi.position.y = 9.2;
+      const shimaki = new THREE.Mesh(new THREE.BoxGeometry(20.5, 0.6, 1.0), red);
+      shimaki.position.y = 8.6;
+      torii.add(nuki, kasagi, shimaki);
+      path.toWorld(s, 0, 0, torii.position);
+      torii.rotation.y = path.heading(s);
+      g.add(torii);
+    }
+    // 飛行船「がんばれ」
+    const blimp = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12), new THREE.MeshLambertMaterial({ color: 0xf2f2f2, emissive: 0x333a48 }));
+    hull.scale.set(4, 4, 13);
+    blimp.add(hull);
+    const banner = new THREE.Mesh(new THREE.PlaneGeometry(14, 3.4), glowBasic(makeBannerTexture(['がんばれ 侍ランナー'], { accent: '#ff3d7f' }), 1.2, { side: THREE.DoubleSide }));
+    banner.position.set(4.1, 0, 0);
+    banner.rotation.y = Math.PI / 2;
+    blimp.add(banner);
+    const bs = a + (b - a) * 0.55;
+    path.toWorld(bs, -34, 26, blimp.position);
+    blimp.rotation.y = path.heading(bs);
+    g.add(blimp);
+    let t = 0;
+    return {
+      group: g,
+      worldSpace: true,
+      update(dt) {
+        t += dt;
+        blimp.position.y = 26 + Math.sin(t * 0.6) * 1.2;
+      },
+    };
+  },
+
+  // 浅草・雷門: 赤い門と大提灯（ランナーは提灯の下をくぐる）
+  kaminarimon() {
+    const g = new THREE.Group();
+    const red = new THREE.MeshLambertMaterial({ color: 0xc8202a, emissive: 0x2a0406 });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0x2a2c33 });
+    for (const x of [-9.6, 9.6]) {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(1.4, 8, 1.4), red);
+      p.position.set(x, 4, 0);
+      g.add(p);
+    }
+    const lintel = new THREE.Mesh(new THREE.BoxGeometry(20.6, 1, 1.4), red);
+    lintel.position.y = 7.6;
+    const roof1 = new THREE.Mesh(new THREE.BoxGeometry(25, 1.2, 7), roofMat);
+    roof1.position.y = 8.7;
+    const roof2 = new THREE.Mesh(new THREE.BoxGeometry(22, 1.0, 5.5), roofMat);
+    roof2.position.y = 9.9;
+    g.add(lintel, roof1, roof2);
+    // 大提灯「雷門」
+    const c = document.createElement('canvas');
+    c.width = 1024;
+    c.height = 512;
+    const x2 = c.getContext('2d');
+    x2.fillStyle = '#c41e26';
+    x2.fillRect(0, 0, 1024, 512);
+    x2.fillStyle = '#141414';
+    x2.fillRect(0, 0, 1024, 36);
+    x2.fillRect(0, 476, 1024, 36);
+    x2.font = '220px "Dela Gothic One", "Hiragino Mincho ProN", serif';
+    x2.textAlign = 'center';
+    x2.textBaseline = 'middle';
+    x2.fillText('雷門', 256, 262);
+    x2.fillText('雷門', 768, 262);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const lanternMat = new THREE.MeshLambertMaterial({ map: tex, emissive: 0x551010 });
+    const lantern = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 3.6, 24), lanternMat);
+    lantern.position.y = 5.2;
+    g.add(lantern);
+    const capMat = new THREE.MeshLambertMaterial({ color: 0x151515 });
+    for (const y of [3.35, 7.05]) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 0.25, 20), capMat);
+      cap.position.y = y;
+      g.add(cap);
+    }
+    return { group: g };
+  },
+
   // 東京ドーム（水道橋）: 白い屋根の低いドーム
   dome(lm) {
     const g = new THREE.Group();
@@ -316,13 +442,13 @@ function overpassHighway(g) {
   };
 }
 
-export function buildLandmark(lm) {
+export function buildLandmark(lm, ctx = {}) {
   const fn = builders[lm.type];
   if (!fn) {
     console.warn('unknown landmark', lm.type);
     return null;
   }
-  return fn(lm);
+  return fn(lm, ctx);
 }
 
 export function disposeObject(obj) {
