@@ -13,10 +13,11 @@ const HALF = CONFIG.road.halfWidth;
 // 客席の段: x0 から外側へ depth ずつ、rise ずつ高くなる（CrowdManager の stadium 配置と共有）
 export const STAND = { x0: HALF + CONFIG.road.sidewalk + 1, depth: 1.5, rise: 0.8, y0: 1.1, tiers: 14 };
 
-const concrete = new THREE.MeshLambertMaterial({ color: 0x5a5d6a });
-const darkMetal = new THREE.MeshLambertMaterial({ color: 0x1c1e28 });
+// トランポリン会場（trampoline/）も同じ材質・部品を使う
+export const concrete = new THREE.MeshLambertMaterial({ color: 0x5a5d6a });
+export const darkMetal = new THREE.MeshLambertMaterial({ color: 0x1c1e28 });
 
-function glow(color, boost = 2) {
+export function glow(color, boost = 2) {
   const m = new THREE.MeshBasicMaterial({ color });
   m.color.multiplyScalar(boost);
   return m;
@@ -69,7 +70,7 @@ function buildStandGeometry(side, length) {
 }
 
 // 板の観客: 人ごとに（テクスチャの 1/32 ずつ）ぴょこぴょこ跳ねる。盛り上がりは沿道の観客と同じ uniform
-function createStandCrowdMaterial(tex, uniforms) {
+export function createStandCrowdMaterial(tex, uniforms) {
   const mat = new THREE.MeshLambertMaterial({ map: tex, emissive: 0x2a2a3a });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = uniforms.uTime;
@@ -108,7 +109,7 @@ function floodlight(side, z, height) {
   return g;
 }
 
-function bigScreen(lines) {
+export function bigScreen(lines) {
   const g = new THREE.Group();
   const frame = new THREE.Mesh(new THREE.BoxGeometry(20, 9.5, 0.8), darkMetal);
   g.add(frame);

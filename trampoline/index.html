@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#070a1c" />
+    <title>トランポリン、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&family=DotGothic16&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body data-phase="intro">
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <!-- ===== 中継の HUD（最後まで真面目） ===== -->
+      <div id="hud" class="hidden">
+        <div class="bug">
+          <span class="live">● LIVE</span><span class="ev">TRAMPOLINE · MEN'S INDIVIDUAL FINAL</span>
+        </div>
+        <div class="board">
+          <div class="b-row b-player"><span class="k">PLAYER</span><span class="v">侍 SAMURAI <small>JPN</small></span></div>
+          <div class="b-row"><span class="k">ATTEMPT</span><span class="v" id="attempt">1/10</span></div>
+          <div class="b-row b-total"><span class="k">TOTAL</span><span class="v" id="total">0</span></div>
+        </div>
+        <div class="stats">
+          <div><span class="k">HEIGHT</span><b id="height">0.00m</b></div>
+          <div><span class="k">ROTATION</span><b id="rotation">0.00</b></div>
+          <div><span class="k">LANDING</span><b id="landing">-</b></div>
+          <div><span class="k">SCORE</span><b id="score">0</b></div>
+        </div>
+        <div id="zone" class="zone"></div>
+      </div>
+
+      <!-- 空中タイピング -->
+      <div id="word" class="word hidden">
+        <div id="wordText" class="w-text"></div>
+        <div id="wordName" class="w-name"></div>
+        <div id="chain" class="w-chain"></div>
+      </div>
+      <div id="keys" class="keys hidden"></div>
+      <div id="steer" class="steer hidden">
+        <button data-steer="-1">◀</button>
+        <button data-steer="1">▶</button>
+      </div>
+
+      <!-- 踏み込みのタイミング -->
+      <div id="meter" class="meter hidden">
+        <div class="m-bar"><i id="meterFill"></i><em></em></div>
+        <div id="meterLabel" class="m-label"></div>
+      </div>
+
+      <div id="feed" class="feed"></div>
+      <div id="nanoni" class="nanoni"></div>
+      <div id="caption" class="caption"></div>
+      <div id="commentary" class="commentary"></div>
+      <div id="result" class="result hidden"></div>
+
+      <!-- ===== タイトル ===== -->
+      <div id="intro" class="screen intro">
+        <div class="intro-wrap">
+          <div class="i-live">● LIVE · TRAMPOLINE MEN'S INDIVIDUAL FINAL</div>
+          <h1><span>トランポリン、</span><span class="b">なのに。</span></h1>
+          <p class="i-lead">数秒しかない滞空時間に、ゲームを詰め込みすぎる。</p>
+          <ol class="i-how">
+            <li><kbd>SPACE</kbd> ベッドが沈む瞬間に踏み込む（スマホはタップ）</li>
+            <li>空中は時間がゆっくり。出てきた英単語を<b>タイピング</b>すると技になる</li>
+            <li>途中まででも回る。<b>F</b> で少し、<b>FL</b> で半回転、<b>FLIP</b> で 1 回転</li>
+            <li>回りきってから着地。10 回の試技の合計で競う</li>
+          </ol>
+          <div class="i-start blink">SPACE / TAP でスタート</div>
+        </div>
+        <button id="back" class="back-btn hidden" type="button">← タイトルへ</button>
+      </div>
+
+      <!-- ===== 最終結果 ===== -->
+      <div id="final" class="screen final hidden">
+        <div class="final-wrap">
+          <div class="f-head">FINAL RESULT · 侍 SAMURAI (JPN)</div>
+          <div class="f-label">TOTAL SCORE</div>
+          <div class="f-total">0</div>
+          <div class="f-best"></div>
+          <ul class="f-cats"></ul>
+          <div class="f-note"></div>
+          <div class="f-actions">
+            <button type="button" data-action="retry">もう一度（SPACE）</button>
+            <button type="button" data-action="back" class="f-back hidden">← タイトルへ</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="pause" class="screen pause hidden"><div>PAUSE<small>ESC / タップで再開</small></div></div>
+      <button id="muteBtn" class="mute-btn" type="button" aria-label="mute">♪</button>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

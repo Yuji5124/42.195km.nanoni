@@ -172,15 +172,17 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
     uDim: { value: 0 },
     // 大きくする（足元を中心に）: 1500m のツイスト「巨人の観客」
     uGrow: { value: 1 },
+    // 一斉に跳ぶ高さ（m）: トランポリンの「観客も飛んだ！」。人ごとに少しずれる
+    uHop: { value: 0 },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     const anim = mode === 'spectator' ? SPECTATOR_ANIM : RUNNER_ANIM;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nuniform float uGrow;\n${COMMON_VERT}\n${anim}`)
+      .replace('#include <common>', `#include <common>\nuniform float uGrow;\nuniform float uHop;\n${COMMON_VERT}\n${anim}`)
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = animNormal(normal);')
-      .replace('#include <begin_vertex>', 'vec3 transformed = animPos(position) * uGrow;\nvRCol = pickColor();')
+      .replace('#include <begin_vertex>', 'vec3 transformed = animPos(position) * uGrow;\ntransformed.y += uHop * (0.7 + 0.6 * fract(iAnim.x * 5.31));\nvRCol = pickColor();')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvRimView = -mvPosition.xyz;');
     shader.fragmentShader = shader.fragmentShader
       .replace(

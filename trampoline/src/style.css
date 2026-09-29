@@ -1,0 +1,807 @@
+/* トランポリン、なのに。 ─ 見た目は 1500m / 800m の中継と同じ系統（色・フォント）。
+   中継の文字は最後まで真面目。狂うのは画面の中身だけ。 */
+:root {
+  --cyan: #39e6ff;
+  --pink: #ff3d7f;
+  --yellow: #ffd23f;
+  --ink: #070a1c;
+  --panel: rgba(6, 9, 28, 0.78);
+  --font-num: 'Chakra Petch', 'Arial Narrow', system-ui, sans-serif;
+  --font-jp: 'Dela Gothic One', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'Noto Sans JP', sans-serif;
+  --safe-t: max(12px, env(safe-area-inset-top));
+  --safe-l: max(14px, env(safe-area-inset-left));
+  --safe-r: max(14px, env(safe-area-inset-right));
+  --safe-b: max(12px, env(safe-area-inset-bottom));
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-num);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#ui button {
+  pointer-events: auto;
+  font-family: inherit;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ===== 中継の HUD ===== */
+.bug {
+  position: absolute;
+  top: var(--safe-t);
+  left: var(--safe-l);
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+.bug .live {
+  padding: 5px 10px;
+  background: #e0142c;
+  animation: blink 0.9s infinite alternate;
+}
+.bug .ev {
+  padding: 5px 12px;
+  background: var(--panel);
+}
+.board {
+  position: absolute;
+  top: var(--safe-t);
+  right: var(--safe-r);
+  min-width: 230px;
+  background: var(--panel);
+  border-top: 3px solid var(--yellow);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+.b-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 4px 12px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.b-row .k {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  align-self: center;
+}
+.b-player .v {
+  font-family: var(--font-jp);
+  font-size: 14px;
+}
+.b-player small {
+  font-family: var(--font-num);
+  color: var(--cyan);
+}
+.b-total {
+  background: rgba(255, 210, 63, 0.12);
+}
+.b-total .v {
+  color: var(--yellow);
+  font-size: 19px;
+}
+.stats {
+  position: absolute;
+  left: var(--safe-l);
+  bottom: var(--safe-b);
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  background: var(--panel);
+  border-left: 4px solid var(--cyan);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+.stats > div {
+  padding: 6px 14px;
+  display: flex;
+  flex-direction: column;
+  min-width: 92px;
+}
+.stats > div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+.stats .k {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 700;
+}
+.stats b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.zone {
+  position: absolute;
+  top: calc(var(--safe-t) + 34px);
+  left: var(--safe-l);
+  padding: 3px 10px;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  font-weight: 700;
+  background: rgba(57, 230, 255, 0.18);
+  border-left: 3px solid var(--cyan);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.zone.show {
+  opacity: 1;
+}
+
+/* ===== 空中タイピング ===== */
+.word {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 150px);
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+}
+.w-text {
+  font-size: clamp(38px, 7.4vw, 78px);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-shadow: 0 3px 0 #000, 0 0 24px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+.w-text b {
+  color: var(--cyan);
+  text-shadow: 0 3px 0 #000, 0 0 18px var(--cyan);
+}
+.w-text u {
+  text-decoration: none;
+  color: #fff;
+  border-bottom: 5px solid var(--yellow);
+  animation: caret 0.5s infinite alternate;
+}
+.w-text i {
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.55);
+}
+.word.miss .w-text {
+  animation: shake 0.16s;
+}
+.word.miss .w-text u {
+  color: #ff5a5a;
+  border-color: #ff5a5a;
+}
+.w-name {
+  margin-top: 8px;
+  font-family: var(--font-jp);
+  font-size: clamp(13px, 1.8vw, 17px);
+  color: var(--yellow);
+  text-shadow: 0 2px 0 #000;
+}
+.w-chain {
+  margin-top: 4px;
+  font-size: 14px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.75);
+  text-shadow: 0 2px 0 #000;
+}
+.keys {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 84px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+}
+.keys button {
+  width: 66px;
+  height: 66px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(8, 12, 40, 0.82);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 700;
+}
+.keys button.hit {
+  background: var(--cyan);
+  color: #000;
+}
+.steer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--safe-b) + 84px);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 var(--safe-r) 0 var(--safe-l);
+}
+.steer button {
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(8, 12, 40, 0.7);
+  color: #fff;
+  font-size: 28px;
+}
+
+/* ===== 踏み込みのタイミング ===== */
+.meter {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 130px);
+  transform: translateX(-50%);
+  width: min(360px, 70vw);
+  text-align: center;
+}
+.m-bar {
+  position: relative;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+.m-bar i {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(57, 230, 255, 0.3), var(--cyan));
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.m-bar em {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 82%;
+  right: 0;
+  background: rgba(255, 210, 63, 0.35);
+  border-left: 2px solid var(--yellow);
+}
+.meter.now .m-bar i {
+  background: var(--yellow);
+}
+.m-label {
+  margin-top: 6px;
+  font-family: var(--font-jp);
+  font-size: 15px;
+  text-shadow: 0 2px 0 #000;
+}
+
+/* ===== 得点の内訳（右に流れる） ===== */
+.feed {
+  position: absolute;
+  right: var(--safe-r);
+  top: calc(var(--safe-t) + 110px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+.feed-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border-right: 3px solid var(--cyan);
+  font-weight: 700;
+  font-size: 15px;
+  animation: feedIn 0.25s ease-out;
+  transition: opacity 0.5s, transform 0.5s;
+}
+.feed-item .cat {
+  font-family: var(--font-jp);
+  font-size: 10px;
+  padding: 1px 5px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+}
+.feed-item .lbl {
+  font-family: var(--font-jp);
+  font-size: 14px;
+}
+.feed-item b {
+  color: var(--yellow);
+  min-width: 56px;
+  text-align: right;
+}
+.feed-item.big {
+  font-size: 18px;
+  border-right-color: var(--yellow);
+  background: rgba(40, 24, 0, 0.82);
+}
+.feed-item.minus b {
+  color: #ff6a6a;
+}
+.feed-item.out {
+  opacity: 0;
+  transform: translateX(20px);
+}
+.cat-nanoni {
+  border-right-color: var(--pink) !important;
+}
+.cat-camera,
+.cat-background {
+  border-right-color: #a56bff !important;
+}
+.cat-audience {
+  border-right-color: #3dff8b !important;
+}
+.cat-accident {
+  border-right-color: #ff7a1a !important;
+}
+
+/* 「〜なのに、〜！」 */
+.nanoni {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%) scale(0.9);
+  width: max-content;
+  max-width: 92vw;
+  text-align: center;
+  font-family: var(--font-jp);
+  font-size: clamp(22px, 4.2vw, 46px);
+  line-height: 1.25;
+  color: #fff;
+  text-shadow: 0 3px 0 #000, 0 0 22px var(--pink);
+  opacity: 0;
+  pointer-events: none;
+}
+.nanoni small {
+  display: block;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 0.8em;
+  color: var(--yellow);
+}
+.nanoni.show {
+  animation: nanoniIn 2.6s ease-out forwards;
+}
+.caption {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 150px);
+  transform: translateX(-50%);
+  padding: 4px 14px;
+  font-family: var(--font-jp);
+  font-size: clamp(16px, 2.4vw, 24px);
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.caption.show {
+  opacity: 1;
+}
+.commentary {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 64px);
+  transform: translateX(-50%) translateY(8px);
+  max-width: min(760px, 92vw);
+  width: max-content;
+  padding: 8px 14px;
+  background: rgba(8, 8, 20, 0.8);
+  border-left: 4px solid var(--pink);
+  font-family: var(--font-jp);
+  font-size: clamp(13px, 1.9vw, 18px);
+  line-height: 1.5;
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+}
+.commentary.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.commentary .mic {
+  display: inline-block;
+  margin-right: 10px;
+  padding: 0 6px;
+  background: var(--pink);
+  font-size: 0.8em;
+}
+
+/* ===== 試技の結果 ===== */
+.result {
+  position: absolute;
+  right: var(--safe-r);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(380px, 92vw);
+  max-height: 76vh;
+  overflow: hidden;
+  background: rgba(6, 9, 28, 0.9);
+  border-top: 4px solid var(--yellow);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
+  font-weight: 700;
+}
+.result.show {
+  animation: resultIn 0.35s ease-out;
+}
+.r-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  background: rgba(255, 255, 255, 0.06);
+}
+.r-head span + span {
+  font-family: var(--font-jp);
+  font-size: 12px;
+}
+.r-judges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 14px;
+}
+.r-judges i {
+  font-style: normal;
+  padding: 2px 6px;
+  background: #fbfbf6;
+  color: #111;
+  font-size: 15px;
+}
+.r-judges em {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--cyan);
+}
+.result ul {
+  list-style: none;
+  margin: 0;
+  padding: 2px 14px;
+}
+.result li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 14px;
+  animation: rowIn 0.3s ease-out backwards;
+}
+.result li span {
+  font-family: var(--font-jp);
+  font-size: 13px;
+  font-weight: 400;
+}
+.result li b {
+  color: var(--yellow);
+}
+.result li:nth-child(1) { animation-delay: 0.05s; }
+.result li:nth-child(2) { animation-delay: 0.12s; }
+.result li:nth-child(3) { animation-delay: 0.19s; }
+.result li:nth-child(4) { animation-delay: 0.26s; }
+.result li:nth-child(5) { animation-delay: 0.33s; }
+.result li:nth-child(6) { animation-delay: 0.4s; }
+.result li:nth-child(7) { animation-delay: 0.47s; }
+.result li:nth-child(8) { animation-delay: 0.54s; }
+.result li:nth-child(n + 9) { animation-delay: 0.6s; }
+.r-sum,
+.r-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 14px;
+  font-size: 15px;
+}
+.r-sum b {
+  font-size: 22px;
+}
+.r-total {
+  background: rgba(255, 210, 63, 0.14);
+}
+.r-total b {
+  color: var(--yellow);
+  font-size: 24px;
+}
+
+/* ===== タイトル / 結果 / ポーズ ===== */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+}
+.intro {
+  background: radial-gradient(ellipse at 50% 60%, rgba(8, 10, 40, 0.35), rgba(4, 5, 18, 0.82));
+}
+.intro-wrap {
+  max-width: min(720px, 92vw);
+  text-align: center;
+}
+.i-live {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #e0142c;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.intro h1 {
+  margin: 14px 0 6px;
+  font-family: var(--font-jp);
+  font-weight: 400;
+  font-size: clamp(34px, 7.4vw, 76px);
+  line-height: 1.1;
+  text-shadow: 0 4px 0 #000, 0 0 30px rgba(57, 230, 255, 0.35);
+}
+.intro h1 .b {
+  color: var(--pink);
+}
+.i-lead {
+  margin: 0 0 18px;
+  font-family: var(--font-jp);
+  font-size: clamp(14px, 2.2vw, 20px);
+  color: var(--yellow);
+}
+.i-how {
+  display: inline-block;
+  margin: 0 0 20px;
+  padding: 12px 18px 12px 36px;
+  text-align: left;
+  background: var(--panel);
+  font-family: var(--font-jp);
+  font-size: clamp(12px, 1.8vw, 15px);
+  line-height: 1.9;
+}
+.i-how b {
+  color: var(--cyan);
+  font-family: var(--font-num);
+}
+kbd {
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
+  font-family: var(--font-num);
+  font-size: 0.9em;
+}
+.i-start {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.blink {
+  animation: blink 0.9s infinite alternate;
+}
+.back-btn {
+  position: absolute;
+  top: var(--safe-t);
+  left: var(--safe-l);
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(8, 12, 40, 0.75);
+  color: #fff;
+  font-family: var(--font-jp) !important;
+  font-size: 14px;
+  cursor: pointer;
+}
+.final {
+  background: rgba(4, 5, 18, 0.72);
+}
+.final-wrap {
+  width: min(520px, 92vw);
+  padding: 20px 24px;
+  background: rgba(6, 9, 28, 0.94);
+  border-top: 5px solid var(--yellow);
+  text-align: center;
+}
+.f-head {
+  font-family: var(--font-jp);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+.f-label {
+  margin-top: 10px;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--cyan);
+  font-weight: 700;
+}
+.f-total {
+  font-size: clamp(46px, 10vw, 76px);
+  font-weight: 700;
+  color: var(--yellow);
+  line-height: 1.1;
+}
+.f-best {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.f-cats {
+  list-style: none;
+  margin: 14px 0 8px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  text-align: left;
+}
+.f-cats li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.f-cats small {
+  font-family: var(--font-jp);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.f-cats b {
+  margin-left: auto;
+}
+.f-note {
+  font-family: var(--font-jp);
+  font-size: 14px;
+  color: var(--pink);
+  min-height: 1em;
+}
+.f-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.f-actions button {
+  padding: 10px 18px;
+  border: 0;
+  background: var(--cyan);
+  color: #000;
+  font-family: var(--font-jp) !important;
+  font-size: 15px;
+  cursor: pointer;
+}
+.f-actions .f-back {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+.pause {
+  background: rgba(0, 0, 0, 0.55);
+  font-size: 40px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+.pause small {
+  display: block;
+  font-family: var(--font-jp);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.mute-btn {
+  position: absolute;
+  right: var(--safe-r);
+  bottom: var(--safe-b);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(8, 12, 40, 0.6);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+.mute-btn.off {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+body[data-phase='intro'] .mute-btn,
+body[data-phase='final'] .mute-btn {
+  display: none;
+}
+
+/* 映像がおかしくなっても、中継の文字は揺れない（揺れるのは中身だけ） */
+@keyframes blink {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+@keyframes caret {
+  from { border-bottom-color: var(--yellow); }
+  to { border-bottom-color: transparent; }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-8px); }
+  75% { transform: translateX(8px); }
+}
+@keyframes feedIn {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes nanoniIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, -50%) scale(1.03); }
+  100% { opacity: 0; transform: translate(-50%, -54%) scale(1.03); }
+}
+@keyframes resultIn {
+  from { opacity: 0; transform: translate(30px, -50%); }
+  to { opacity: 1; transform: translate(0, -50%); }
+}
+@keyframes rowIn {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ===== スマホ（縦） ===== */
+@media (max-width: 640px) {
+  .bug .ev {
+    display: none;
+  }
+  .board {
+    min-width: 0;
+  }
+  .b-row {
+    padding: 2px 8px;
+    font-size: 13px;
+  }
+  .b-player {
+    display: none;
+  }
+  .stats {
+    grid-template-columns: repeat(2, auto);
+  }
+  .stats > div {
+    min-width: 84px;
+    padding: 4px 10px;
+  }
+  .stats > div:nth-child(3) {
+    border-left: 0;
+  }
+  .stats b {
+    font-size: 17px;
+  }
+  .feed {
+    top: calc(var(--safe-t) + 84px);
+  }
+  .feed-item {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+  .feed-item .lbl {
+    font-size: 12px;
+  }
+  .word {
+    bottom: calc(var(--safe-b) + 170px);
+  }
+  .result {
+    top: auto;
+    bottom: calc(var(--safe-b) + 110px);
+    transform: none;
+    max-height: 56vh;
+    right: 50%;
+    margin-right: calc(min(380px, 92vw) / -2);
+  }
+  .result.show {
+    animation: none;
+  }
+  .commentary {
+    bottom: calc(var(--safe-b) + 116px);
+  }
+}
