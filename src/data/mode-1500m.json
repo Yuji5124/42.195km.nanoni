@@ -20,6 +20,7 @@
     { "fromKm": 1.29, "toKm": 1.33, "turnDeg": 20 }
   ],
   "defaults": {
+    "twists": 0,
     "camera": "NORMAL",
     "fx": "none",
     "music": "normal",
@@ -39,6 +40,7 @@
     {
       "km": -1,
       "id": "stadium_start",
+      "twists": 1,
       "camera": "NORMAL",
       "music": "stadium",
       "crowd": 1.0,
@@ -47,6 +49,7 @@
     {
       "km": 0.15,
       "id": "tokyo_road",
+      "twists": 2,
       "music": "normal",
       "crowd": 0.75,
       "obstacles": 0.3,
@@ -58,6 +61,7 @@
     {
       "km": 0.3,
       "id": "racing",
+      "twists": 1,
       "camera": "RACING",
       "fx": "racer",
       "music": "race",
@@ -71,6 +75,7 @@
     {
       "km": 0.45,
       "id": "side_scroll",
+      "twists": 0,
       "camera": "SIDE_2D",
       "fx": "retro",
       "music": "chip",
@@ -85,6 +90,7 @@
     {
       "km": 0.6,
       "id": "top_dodge",
+      "twists": 0,
       "camera": "TOP_DOWN",
       "music": "dodge",
       "crowd": 0.45,
@@ -99,6 +105,7 @@
     {
       "km": 0.75,
       "id": "halfway",
+      "twists": 0,
       "music": null,
       "crowd": 0.5,
       "cheerMul": 0.5,
@@ -107,6 +114,7 @@
     {
       "km": 0.754,
       "id": "gravity",
+      "twists": 2,
       "music": "tension",
       "crowd": 0.6,
       "cheerMul": 1.4,
@@ -117,6 +125,7 @@
     {
       "km": 0.9,
       "id": "mirror",
+      "twists": 2,
       "fx": "mirror",
       "music": "mirror",
       "crowd": 0.7,
@@ -128,6 +137,7 @@
     {
       "km": 1.05,
       "id": "tv",
+      "twists": 2,
       "camera": "TV_BROADCAST",
       "fx": "broadcast",
       "music": "tv",
@@ -142,6 +152,7 @@
     {
       "km": 1.2,
       "id": "mega_crowd",
+      "twists": 3,
       "music": "final",
       "crowd": 1.0,
       "crowdLayout": "mega",
@@ -153,6 +164,7 @@
     {
       "km": 1.35,
       "id": "mix_race",
+      "twists": 0,
       "camera": "RACING",
       "fx": "racer",
       "music": "race",
@@ -166,6 +178,7 @@
     {
       "km": 1.37,
       "id": "mix_top",
+      "twists": 0,
       "camera": "TOP_DOWN",
       "music": "dodge",
       "crowd": 0.9,
@@ -175,6 +188,7 @@
     {
       "km": 1.39,
       "id": "mix_side",
+      "twists": 0,
       "camera": "SIDE_2D",
       "fx": "retro",
       "music": "chip",
@@ -186,6 +200,7 @@
     {
       "km": 1.41,
       "id": "mix_tv",
+      "twists": 0,
       "camera": "TV_BROADCAST",
       "fx": "broadcast",
       "music": "tv",
@@ -197,6 +212,7 @@
     {
       "km": 1.43,
       "id": "mix_mirror",
+      "twists": 0,
       "fx": "mirror",
       "music": "mirror",
       "crowd": 1.0,
@@ -207,6 +223,7 @@
     {
       "km": 1.45,
       "id": "stadium_finish",
+      "twists": 0,
       "music": null,
       "crowd": 1.0,
       "crowdLayout": "stadium",

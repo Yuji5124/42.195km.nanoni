@@ -21,6 +21,7 @@ import { EventDirector } from '../director/EventDirector.js';
 import { CameraDirector } from '../director/CameraDirector.js';
 import { GagDirector } from '../director/GagDirector.js';
 import { EffectManager } from '../fx/EffectManager.js';
+import { Weather } from '../fx/Weather.js';
 import { AudioManager } from '../audio/AudioManager.js';
 import { UIManager } from '../ui/UIManager.js';
 
@@ -47,6 +48,8 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 // 夜の東京 ↔ 雲の上（夕方の空）
 const SKY_NIGHT = { top: new THREE.Color(0x07051a), mid: new THREE.Color(0x2a1846), horizon: new THREE.Color(0xc0406e), fog: new THREE.Color(0x2a1846) };
+// 1500m の「夕焼け」
+const SKY_SUNSET = { top: new THREE.Color(0x2a1c58), mid: new THREE.Color(0xc2476a), horizon: new THREE.Color(0xff8a3a), fog: new THREE.Color(0x8a4a5a) };
 const SKY_DAY = { top: new THREE.Color(0x2e6fd8), mid: new THREE.Color(0x8fc4ff), horizon: new THREE.Color(0xffd9a8), fog: new THREE.Color(0xcfe4ff) };
 
 export class Game {
@@ -158,6 +161,7 @@ export class Game {
     this.path = new CoursePath(data.curves, this.distance, { endS: this.distance.goalUnits + 1600 });
     this.chunks = new TokyoChunkManager(scene, this.distance, data, this.path);
     this.crowd = new CrowdManager(scene, this.distance, this.events, this.path);
+    this.weather = new Weather(scene);
     this.chunks.landmarkCtx.crowdMaterial = this.crowd.material;
     this.chunks.landmarkCtx.raceTime = () => this.distance.raceTime;
     this.chunks.landmarkCtx.quality = () => this.fx?.quality ?? 2;
@@ -627,8 +631,21 @@ export class Game {
       falls: st.falls,
       maxCombo: this.cheer.maxCombo,
       cameraChanges: this.cameraDirector.changes,
+      twists: this.sections?.twists ? { history: this.sections.twists.history, maxCombo: this.sections.twists.maxCombo } : null,
     });
     this.ui.showTouch(false);
+  }
+
+  // 1500m のツイスト（見た目だけ）を各システムへ渡す。null ならすべて普段どおり
+  applyTwists(TP, dt) {
+    const p = this.player;
+    p.visualScale = TP?.playerScale ?? 1;
+    p.headScale = TP?.headScale ?? 1;
+    this.crowd.grow = TP?.crowdGrow ?? 1;
+    this.crowd.freeze = TP?.crowdFreeze ?? 0;
+    this.fx.overlay = TP;
+    if (this.weather) this.weather.update(dt, this.camera, TP?.weather ?? null, TP?.weatherAmt ?? 0, 0, window.innerHeight * this.fx.pixelRatio);
+    this.ui.fakeBug(!!TP?.fakeBug, this.time);
   }
 
   // テスト・デモ用の自動操縦（?auto=1）
@@ -687,10 +704,9 @@ export class Game {
       this.freeze -= realDt;
       this.fx.update(realDt, { player: this.player, tier: this.cheer.tier, excitement: this.cheer.excitement, playing: false });
     } else if (!this.paused) {
-      if (this.slowMo > 0) {
-        this.slowMo -= realDt;
-        this.timeScale = this.slowMo > 0 ? 0.35 : 1;
-      }
+      if (this.slowMo > 0) this.slowMo -= realDt;
+      // 写真判定などのスロー × 1500m の「スローモーション」（全員に等しく効く）
+      this.timeScale = (this.slowMo > 0 ? 0.35 : 1) * (this.twistP?.timeScale ?? 1);
       // ?fast=N: 検証用。1 フレームにシミュレーションを N 回進める（描画は 1 回）
       for (let i = 0; i < this.fastSteps; i++) this.update(realDt * this.timeScale, realDt);
     }
@@ -759,6 +775,11 @@ export class Game {
     const fire = running && !!rules.shooter && (this.autopilot ? true : this.input.held('jump'));
     if (playing) this.gags.update(dt, player, { fire });
     this.sections?.update(dt, { running, playing, km, state, rules });
+    // 1500m: 区間の上に重なる小さな「なのに。」（見た目の上書き this.twistP を作る）
+    const tw = this.sections?.twists;
+    if (tw) tw.update(realDt, { km, max: running ? this.events.paramAt('twists', km) ?? 0 : 0, running });
+    const TP = (this.twistP = tw?.P ?? null);
+    this.applyTwists(TP, dt);
     race.update(dt);
 
     // 声援の条件
@@ -775,7 +796,7 @@ export class Game {
     });
 
     this.crowd.update(player.s, dt, cheer.excitement);
-    const roll = running ? this.sections?.cameraRoll?.() ?? state.roll ?? 0 : 0;
+    const roll = running ? (this.sections?.cameraRoll?.() ?? state.roll ?? 0) + (TP?.roll ?? 0) : 0;
     this.cameraDirector.update(dt, { player, time: this.time, roll });
     this.ui.cctvTime(this.distance.raceTime);
     const camMode = this.cameraDirector.mode;
@@ -795,13 +816,14 @@ export class Game {
     this.chunks.update(player.s, dt, this.cameraDirector.sideBlend);
     const skyAmt = this.chunks.skyAmount(player.s);
     const stadAmt = this.chunks.stadiumAmount(player.s);
-    if (skyAmt + stadAmt * 7 !== this.lastSkyAmt) {
-      this.lastSkyAmt = skyAmt + stadAmt * 7;
+    const sunset = Math.round((TP?.sunset ?? 0) * 50) / 50;
+    if (skyAmt + stadAmt * 7 + sunset * 31 !== this.lastSkyAmt) {
+      this.lastSkyAmt = skyAmt + stadAmt * 7 + sunset * 31;
       const su = this.sky.material.uniforms;
-      su.uTop.value.copy(SKY_NIGHT.top).lerp(SKY_DAY.top, skyAmt);
-      su.uMid.value.copy(SKY_NIGHT.mid).lerp(SKY_DAY.mid, skyAmt);
-      su.uHorizon.value.copy(SKY_NIGHT.horizon).lerp(SKY_DAY.horizon, skyAmt);
-      this.scene.fog.color.copy(SKY_NIGHT.fog).lerp(SKY_DAY.fog, skyAmt);
+      su.uTop.value.copy(SKY_NIGHT.top).lerp(SKY_DAY.top, skyAmt).lerp(SKY_SUNSET.top, sunset);
+      su.uMid.value.copy(SKY_NIGHT.mid).lerp(SKY_DAY.mid, skyAmt).lerp(SKY_SUNSET.mid, sunset);
+      su.uHorizon.value.copy(SKY_NIGHT.horizon).lerp(SKY_DAY.horizon, skyAmt).lerp(SKY_SUNSET.horizon, sunset);
+      this.scene.fog.color.copy(SKY_NIGHT.fog).lerp(SKY_DAY.fog, skyAmt).lerp(SKY_SUNSET.fog, sunset);
       // スタジアムは照明で明るい
       this.hemi.intensity = 1.0 + skyAmt * 0.9 + stadAmt * 0.55;
     }
@@ -821,7 +843,7 @@ export class Game {
         total: race.total,
         cheer: cheer.cheer,
         combo: cheer.combo,
-        km: clamp(km, 0, race.state === RACE.RUNNING ? 99 : this.data.goalKm),
+        km: clamp(km + (race.state === RACE.RUNNING ? (TP?.liar ?? 0) / 1000 : 0), 0, race.state === RACE.RUNNING ? 99 : this.data.goalKm),
         fullKm: this.mode.fullKm,
         time: this.distance.raceTime,
         stamina: player.stamina,

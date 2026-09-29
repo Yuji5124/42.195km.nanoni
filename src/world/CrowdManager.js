@@ -126,8 +126,9 @@ export class CrowdManager {
     }
   }
 
+  // grow: 観客の大きさ（1500m のツイスト「巨人の観客」）/ freeze: 観客が固まる（動きも歓声の光も止まる）
   update(playerS, dt, excitement) {
-    this.time += dt;
+    if (!this.freeze) this.time += dt;
     let dirty = false;
     for (let l = 0; l < LANES.length; l++) {
       const base = Math.floor((playerS - CONFIG.crowd.windowBehind) / this.spacing);
@@ -151,11 +152,12 @@ export class CrowdManager {
 
     const u = this.material.userData.uniforms;
     u.uTime.value = this.time;
-    u.uExcite.value = excitement;
+    u.uExcite.value = this.freeze ? 0 : excitement;
+    u.uGrow.value = this.grow ?? 1;
     const f = this.path.sample(playerS);
     u.uPlayerXZ.value.set(f.x, f.z);
     this.flashUniforms.uTime.value = this.time;
-    this.flashUniforms.uLevel.value = clamp((excitement - 0.35) * 2.2, 0, 1);
+    this.flashUniforms.uLevel.value = this.freeze ? 0 : clamp((excitement - 0.35) * 2.2, 0, 1);
   }
 
   setPointScale(scale) {

@@ -63,6 +63,9 @@ export class EffectManager {
     this.fpsAcc = 0;
     this.fpsFrames = 0;
     this.lowTime = 0;
+    // 1500m のツイスト（Twists1500 の P）。区間のプリセットの上に重ねる
+    this.overlay = null;
+    this.holdT = 0;
   }
 
   // モード切替でワールド（シーン）を作り直したとき、パーティクルと残像を新しいシーンへ移す
@@ -164,6 +167,28 @@ export class EffectManager {
     u.uMono.value = this.current.mono;
     u.uTint.value = this.current.tint;
     u.uFisheye.value = this.current.fisheye;
+    // ツイストの上書き: 強い方を採る（区間の見え方は壊さず、上に足す）
+    const o = this.overlay?.fx;
+    u.uHue.value = 0;
+    u.uInvert.value = 0;
+    u.uTall.value = 0;
+    u.uWarm.value = (this.overlay?.sunset ?? 0) * 0.7;
+    if (o) {
+      u.uFisheye.value = Math.max(u.uFisheye.value, o.fisheye);
+      if (o.pixel > 1.5) u.uPixel.value = Math.max(u.uPixel.value, Math.round(o.pixel * this.pixelRatio));
+      if (o.posterize > 1) u.uPosterize.value = u.uPosterize.value ? Math.min(u.uPosterize.value, o.posterize) : o.posterize;
+      u.uMono.value = Math.max(u.uMono.value, o.mono);
+      u.uNoise.value = Math.max(u.uNoise.value, o.noise);
+      u.uScan.value = Math.max(u.uScan.value, o.scan);
+      u.uVignette.value = Math.max(u.uVignette.value, o.vignette);
+      u.uGlitch.value = Math.max(u.uGlitch.value, o.glitch);
+      u.uHue.value = o.hue;
+      u.uInvert.value = o.invert;
+      this.tallCur = damp(this.tallCur ?? 0, o.tall, 5, dt);
+      u.uTall.value = this.tallCur;
+    }
+    this.lowFps = this.overlay?.lowFps ?? 0;
+    this.holdT += dt;
     const blur = this.quality >= 1 ? this.current.blur : 0;
     if (blur > 0.02) {
       // 有効にした最初のフレームは古い残像を混ぜない
@@ -210,7 +235,12 @@ export class EffectManager {
     }
   }
 
+  // 疑似 Low FPS（ツイスト）: 1/lowFps 秒に 1 回だけ描く。前の絵がそのまま残る（ゲームの更新は止めない）
   render() {
+    if (this.lowFps > 0) {
+      if (this.holdT < 1 / this.lowFps) return;
+      this.holdT %= 1 / this.lowFps;
+    } else this.holdT = 0;
     this.composer.render();
   }
 

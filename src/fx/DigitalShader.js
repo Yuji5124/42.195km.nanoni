@@ -20,6 +20,11 @@ export const DigitalShader = {
     uMono: { value: 0 },
     uTint: { value: 0 },
     uFisheye: { value: 0 },
+    // 1500m のツイスト: 色相の回転（虹色）/ ネガ反転 / 縦動画の黒帯
+    uHue: { value: 0 },
+    uInvert: { value: 0 },
+    uTall: { value: 0 },
+    uWarm: { value: 0 }, // 夕焼けの色
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -31,11 +36,21 @@ export const DigitalShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec2 uRes;
-    uniform float uTime, uAberr, uScan, uPixel, uGlitch, uNoise, uVignette, uPosterize, uSpeed, uFlash, uMirror, uMono, uTint, uFisheye;
+    uniform float uTime, uAberr, uScan, uPixel, uGlitch, uNoise, uVignette, uPosterize, uSpeed, uFlash, uMirror, uMono, uTint, uFisheye, uHue, uInvert, uTall, uWarm;
+    vec3 hueShift(vec3 c, float a) {
+      const vec3 k = vec3(0.57735);
+      float ca = cos(a);
+      return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca);
+    }
     varying vec2 vUv;
     float h21(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
       vec2 uv = vUv;
+      // 縦動画: 左右に黒帯（画面の真ん中だけ 9:16）
+      if (uTall > 0.001) {
+        float w = mix(1.0, (9.0 / 16.0) / (uRes.x / uRes.y), uTall);
+        if (abs(vUv.x - 0.5) > w * 0.5) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
+      }
       // ミラーモード: 3D 画面だけ左右反転（HUD は DOM なのでそのまま）
       if (uMirror > 0.5) uv.x = 1.0 - uv.x;
       // 監視カメラの魚眼（樽型ゆがみ）
@@ -77,6 +92,9 @@ export const DigitalShader = {
       col += (h21(vUv * uRes + fract(uTime) * 100.0) - 0.5) * uNoise;
       float v = smoothstep(0.9, 0.25, length(dir));
       col *= mix(1.0, v, uVignette);
+      if (uWarm > 0.001) col *= mix(vec3(1.0), vec3(1.18, 0.9, 0.74), uWarm);
+      if (uHue != 0.0) col = hueShift(col, uHue);
+      if (uInvert > 0.001) col = mix(col, 1.0 - col, uInvert);
       col += uFlash;
       gl_FragColor = vec4(col, 1.0);
     }

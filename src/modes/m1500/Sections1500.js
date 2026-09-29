@@ -3,6 +3,7 @@ import { MODES } from '../../config.js';
 import { clamp, damp, smoothstep } from '../../core/math.js';
 import { TV_SHOTS_1500 } from '../../director/CameraDirector.js';
 import { DodgeField } from './DodgeField.js';
+import { Twists1500 } from './Twists1500.js';
 
 // 「1500m、なのに。」の区間演出。
 // EventDirector（segmented）が区間の切り替わりを 'event' で知らせ、ここで各区間の
@@ -381,6 +382,8 @@ export class Sections1500 {
     this.debris = new GravityDebris(game.scene, game.path);
     this.ghost = game.player.createGhost(game.scene);
     this.avoidFn = (s, x) => this.dodge.avoid(s, x);
+    // 800m 式の小さな「なのに。」（区間の上に重なる）
+    this.twists = new Twists1500(game);
     // 1500m の中継はカメラ名を CAM 01 / TRACKING / HELICOPTER / GOAL CAM に
     game.cameraDirector.tvShots = TV_SHOTS_1500;
     game.cameraDirector.startStyle = 'line';
@@ -414,6 +417,7 @@ export class Sections1500 {
     this.fastT = 0;
     this.dodge.reset();
     this.debris.reset();
+    this.twists?.reset();
     this.ghost.show(false);
     this.g.player.gravityTilt = 0;
     this.g.ui.setTicker(false);
@@ -433,6 +437,7 @@ export class Sections1500 {
     this.fromKm = k >= 0 ? Math.max(0, events[k].km) : 0;
     this.toKm = k >= 0 && k + 1 < events.length ? events[k + 1].km : this.g.data.goalKm;
     this.cur.enter?.(this, { silent });
+    this.twists.onSection(id, this.g.events.paramAt('twists', this.fromKm + 1e-4) ?? 0);
   }
 
   update(dt, ctx) {

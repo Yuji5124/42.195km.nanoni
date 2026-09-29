@@ -1065,3 +1065,102 @@ body[data-mode='TV_BROADCAST'] .hud-bottom {
   from { transform: translateX(-50%) scale(1.5); }
   to { transform: translateX(-50%) scale(1); }
 }
+
+/* ===== 1500m のツイスト（800m、なのに。から） ===== */
+.nanoni {
+  position: absolute;
+  left: 50%;
+  top: 27%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: 90vw;
+  text-align: center;
+  font-family: var(--font-jp);
+  font-size: clamp(20px, 3.6vw, 40px);
+  line-height: 1.3;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(0, 0, 0, 0.85), 3px 3px 0 rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  pointer-events: none;
+}
+.nanoni.show {
+  animation: nanoniIn 2.4s ease-out forwards;
+}
+.nanoni-combo {
+  position: absolute;
+  left: 50%;
+  top: calc(27% + clamp(30px, 5vw, 56px));
+  transform: translateX(-50%);
+  font-family: var(--font-jp);
+  font-size: clamp(13px, 1.8vw, 18px);
+  color: var(--yellow);
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  pointer-events: none;
+}
+.nanoni-combo.show {
+  animation: nanoniIn 2.4s ease-out forwards;
+}
+@keyframes nanoniIn {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(1.1); }
+  12% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.nanoni-combo.show { animation-name: comboIn; }
+@keyframes comboIn {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+.fakebug {
+  position: absolute;
+  top: 130px;
+  left: 18px;
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 15px;
+  line-height: 1.5;
+  white-space: pre;
+  color: #ff4d4d;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid #ff4d4d;
+  padding: 8px 12px;
+}
+.result-body .had {
+  margin-top: 14px;
+}
+.result-body .had-title {
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.result-body .had ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.result-body .had li {
+  font-family: var(--font-jp);
+  font-size: 12px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.result-body .had li small {
+  margin-left: 5px;
+  opacity: 0.6;
+  font-family: var(--font-num);
+}
+.result-body .had li.combo {
+  color: var(--pink);
+  border-color: var(--pink);
+}
+@media (max-width: 640px) {
+  .nanoni { top: 30%; font-size: clamp(16px, 5.4vw, 26px); }
+  .nanoni-combo { top: calc(30% + 34px); }
+  .fakebug { top: 150px; font-size: 12px; }
+}

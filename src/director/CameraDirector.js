@@ -133,8 +133,10 @@ export class CameraDirector {
       }
       case MODES.NORMAL: {
         const speedN = clamp((p.speed - 12) / 12, 0, 1);
-        W(p.s - 6.2 + speedN * 0.8, this.followX * 0.6, 3.1 + this.followY * 0.35, out.pos);
-        W(p.s + 12, this.followX * 0.9, 1.1 + this.followY * 0.5, out.look);
+        // 巨大な侍（1500m のツイスト）: 少しだけ引く（引きすぎると大きく見えない）
+        const k = Math.max(1, (p.visualScale ?? 1) * 0.55);
+        W(p.s - (6.2 - speedN * 0.8) * k, this.followX * 0.6, (3.1 + this.followY * 0.35) * k, out.pos);
+        W(p.s + 12, this.followX * 0.9, (1.1 + this.followY * 0.5) * k, out.look);
         out.fov = 60 + speedN * 13;
         out.roll = this.lean;
         break;

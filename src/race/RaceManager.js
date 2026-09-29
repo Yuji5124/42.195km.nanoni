@@ -25,7 +25,7 @@ export class RaceManager {
   }
 
   resetStats() {
-    this.stats = { overtakes: 0, falls: 0, finishTime: 0, finishPosition: 0, bestPosition: this.total };
+    this.stats = { overtakes: 0, falls: 0, nearMiss: 0, finishTime: 0, finishPosition: 0, bestPosition: this.total };
     this.position = this.total;
     this.leader = false;
   }

@@ -245,6 +245,9 @@ export class RunnerController {
     root.position.set(f.x + f.cos * this.x, lift, f.z - f.sin * this.x);
     root.rotation.set(pitch, f.theta + this.yaw, roll, 'YXZ');
     root.visible = this.invuln <= 0 || Math.floor(this.invuln * 14) % 2 === 0;
+    // 1500m のツイスト（巨大な侍 / 頭だけ巨大）: 見た目だけ。当たり判定は変わらない
+    root.scale.setScalar(this.visualScale ?? 1);
+    m.head.scale.setScalar(this.headScale ?? 1);
 
     this.path.toWorld(this.s, this.x, this.y, this.position);
     m.setRim(undefined, 0.45 + (this.dashing ? 0.7 : 0) + (this.boostTimer > 0 ? 0.5 : 0));

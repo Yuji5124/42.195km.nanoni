@@ -168,6 +168,34 @@ export class UIManager {
     this.timers.caption = setTimeout(() => c.classList.remove('show'), ms);
   }
 
+  // 1500m のツイスト: 「なのに。」の一言と COMBO
+  nanoni(text, combo = '') {
+    const el = (this.el.nanoni ??= document.getElementById('nanoni'));
+    const ce = (this.el.nanoniCombo ??= document.getElementById('nanoniCombo'));
+    if (!el) return;
+    el.textContent = text;
+    ce.textContent = combo;
+    for (const e of [el, ce]) {
+      e.classList.remove('show');
+      void e.offsetWidth;
+    }
+    el.classList.add('show');
+    if (combo) ce.classList.add('show');
+  }
+
+  // 偽のバグ表示（本物のエラーではない）
+  fakeBug(on, t) {
+    const el = (this.el.fakebug ??= document.getElementById('fakebug'));
+    if (!el) return;
+    if (on !== this.fakeOn) {
+      this.fakeOn = on;
+      el.classList.toggle('hidden', !on);
+    }
+    if (!on) return;
+    const lines = ['FPS 3', `PING ${9000 + Math.floor((t * 37) % 999)}`, 'POSITION NaN', 'DISTANCE ????m', 'MEMORY ERROR 0x1500', 'TOKYO NOT FOUND'];
+    el.textContent = lines.slice(0, 3 + (Math.floor(t * 2) % 4)).join('\n');
+  }
+
   // 横スクロールの跳ぶ合図: 近づくと「▼ SPACE」、越えられる瞬間に大きく「JUMP!」
   jumpCue(cue, touch) {
     const el = (this.el.jumpcue ??= document.getElementById('jumpcue'));
@@ -318,6 +346,7 @@ export class UIManager {
         ${row('CAMERA CHANGES', stats.cameraChanges)}
       </div>
       <div class="rank"><span class="grade g${rank}">${rank}</span><div><small>盛り上げ度</small><div>${titles[rank]}</div></div></div>
+      ${this.hadList(stats.twists)}
       <div class="again">SPACE / TAP でもう一度走る</div>
       <button class="to-title" data-action="title">T ─ タイトルへ（モード選択）</button>
     `;
@@ -348,10 +377,19 @@ export class UIManager {
         ${row('MAX SPEED', `${stats.maxKmh.toFixed(1)} km/h`)}
       </div>
       <div class="rank"><span class="grade g${rank}">${rank}</span><div><small>盛り上げ度</small><div>${titles[rank]}</div></div></div>
+      ${this.hadList(stats.twists)}
       <div class="again">SPACE / TAP でもう一度走る</div>
       <button class="to-title" data-action="title">T ─ タイトルへ（モード選択）</button>
     `;
     this.el.result.classList.remove('hidden');
+  }
+
+  // 「THIS RACE HAD:」（1500m のツイストの記録。最大 COMBO も）
+  hadList(tw) {
+    if (!tw?.history?.length) return '';
+    const chips = tw.history.map((h) => `<li>${h.name}<small>${h.m}m</small></li>`);
+    if (tw.maxCombo >= 2) chips.push(`<li class="combo">最大なのにCOMBO ×${tw.maxCombo}</li>`);
+    return `<div class="had"><div class="had-title">THIS RACE HAD:</div><ul>${chips.join('')}</ul></div>`;
   }
 
   hideResult() {

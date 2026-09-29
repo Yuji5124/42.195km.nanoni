@@ -170,15 +170,17 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
     uNearFade: { value: 0 },
     // 暗くする（0〜1）: 横スクロールで奥の集団を影にする
     uDim: { value: 0 },
+    // 大きくする（足元を中心に）: 1500m のツイスト「巨人の観客」
+    uGrow: { value: 1 },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     const anim = mode === 'spectator' ? SPECTATOR_ANIM : RUNNER_ANIM;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${COMMON_VERT}\n${anim}`)
+      .replace('#include <common>', `#include <common>\nuniform float uGrow;\n${COMMON_VERT}\n${anim}`)
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = animNormal(normal);')
-      .replace('#include <begin_vertex>', 'vec3 transformed = animPos(position);\nvRCol = pickColor();')
+      .replace('#include <begin_vertex>', 'vec3 transformed = animPos(position) * uGrow;\nvRCol = pickColor();')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvRimView = -mvPosition.xyz;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
