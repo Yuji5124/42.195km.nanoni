@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#07091a" />
+    <title>800m、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&family=DotGothic16&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/ui/style.css" />
+  </head>
+  <body data-skin="normal" data-phase="title">
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <!-- ===== HUD（スキンごとに中身が変わる。値は同じ RaceCore から） ===== -->
+      <div id="hud" class="hidden">
+        <!-- normal: 陸上競技の中継っぽい素直な表示 -->
+        <div class="skin skin-normal">
+          <div class="n-rank"><b data-v="rank">-</b><small>/12</small></div>
+          <div class="n-lap" data-v="lap">LAP 1/2</div>
+          <div class="n-dist"><b data-v="dist">000</b><small>m / 800m</small></div>
+          <div class="n-time" data-v="time">0:00.00</div>
+          <div class="n-stamina"><span>STAMINA</span><div class="bar"><i data-bar="stamina"></i></div></div>
+          <div class="n-cheer"><span>CHEER</span><div class="bar"><i data-bar="cheer"></i></div></div>
+        </div>
+        <!-- broadcast: スポーツ中継 -->
+        <div class="skin skin-broadcast">
+          <div class="bc-bug"><span class="bc-live">● LIVE</span><span class="bc-ev">MEN'S 800m FINAL</span><span data-v="lap">LAP 1/2</span><span data-v="time">0:00.00</span></div>
+          <div class="bc-board" data-v="board"></div>
+          <div class="bc-lower"><span class="bc-pos" data-v="rank">-</span><span class="bc-name">侍 SAMURAI</span><span class="bc-dist" data-v="remain">800m</span></div>
+        </div>
+        <!-- rpg -->
+        <div class="skin skin-rpg">
+          <div class="rpg-status"><div>侍 <small>Lv.</small><span data-v="dist">0</span></div><div>HP <div class="bar hp"><i data-bar="stamina"></i></div></div><div>MP <div class="bar mp"><i data-bar="cheer"></i></div></div></div>
+          <div class="rpg-window"><p data-v="rpgline">侍 は はしりだした！</p><ul><li class="sel">▶ はしる</li><li>スパート</li><li>にげる</li></ul></div>
+        </div>
+        <!-- fighting -->
+        <div class="skin skin-fighting">
+          <div class="ft-bars"><div class="ft-p"><div class="bar"><i data-bar="stamina"></i></div><b>SAMURAI</b></div><div class="ft-timer" data-v="ftTimer">99</div><div class="ft-e"><div class="bar"><i data-bar="leader"></i></div><b data-v="leaderName">HAYAMI</b></div></div>
+          <div class="ft-round">ROUND <span data-v="lapNum">1</span></div>
+        </div>
+        <!-- racing -->
+        <div class="skin skin-racing">
+          <div class="rc-pos">POS <b data-v="rank">-</b><small>/12</small></div>
+          <div class="rc-lap">LAP <b data-v="lapNum">1</b>/2</div>
+          <canvas class="rc-map" width="180" height="110" data-map></canvas>
+          <div class="rc-speed"><b data-v="kmh">0</b><small>km/h</small><div class="rc-gear">GEAR <span data-v="gear">1</span></div></div>
+        </div>
+        <!-- rhythm -->
+        <div class="skin skin-rhythm">
+          <div class="rh-lane"><div class="rh-line"></div><div class="rh-notes" data-notes></div></div>
+          <div class="rh-judge" data-v="judge"></div>
+          <div class="rh-score">SCORE <b data-v="dist">0</b></div>
+        </div>
+        <!-- minimal（ラスト 40m） -->
+        <div class="skin skin-minimal">
+          <div class="mn-dist"><b data-v="remain">40</b><small>m</small></div>
+        </div>
+      </div>
+
+      <div id="fakebug" class="fakebug hidden"></div>
+      <div id="nanoni" class="nanoni"></div>
+      <div id="combo" class="combo-text"></div>
+      <div id="call" class="call"></div>
+      <div id="camlabel" class="camlabel"></div>
+      <div id="announcer" class="announcer"></div>
+      <div id="stepfx" class="stepfx"></div>
+
+      <!-- ===== タイトル ===== -->
+      <div id="title" class="screen title">
+        <div class="t-wrap">
+          <h1><span>800m、</span><span>なのに。</span></h1>
+          <p class="copy">2周だけなのに、何回ゲーム変わるの？</p>
+          <button class="t-start" data-action="start">START</button>
+          <div class="t-seed">SEED <input id="seedInput" inputmode="numeric" maxlength="6" /> <button data-action="reroll">↻</button></div>
+          <div class="t-keys">
+            <div><kbd>W</kbd><kbd>S</kbd> / <kbd>↑</kbd><kbd>↓</kbd> ペース</div>
+            <div><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> レーン</div>
+            <div><kbd>SPACE</kbd> 足音に合わせて（リズム）</div>
+            <div><kbd>SHIFT</kbd> スパート</div>
+            <div><kbd>F1</kbd> 開発パネル　<kbd>M</kbd> 音</div>
+          </div>
+          <p class="t-note">400m トラック 2 周・12 人。<br />前半に飛ばすと 500m から苦しい。最後の 40m だけは、本気の陸上。</p>
+        </div>
+      </div>
+
+      <!-- ===== 結果（真面目） ===== -->
+      <div id="result" class="screen result hidden">
+        <div class="r-wrap">
+          <div class="r-head">MEN'S 800m FINAL ─ RESULT</div>
+          <table class="r-table"><tbody data-results></tbody></table>
+          <div class="r-had"><div class="r-had-title">THIS RACE HAD:</div><ul data-had></ul></div>
+          <div class="r-foot"><span class="r-seed">SEED: <b data-v="seed">0</b></span><button data-action="same">同じ seed でもう一回（R）</button><button data-action="new">新しい seed（N / SPACE）</button></div>
+        </div>
+      </div>
+
+      <div id="pause" class="screen pause hidden"><div>PAUSE<small>P / ESC</small></div></div>
+
+      <!-- ===== スマホ ===== -->
+      <div id="touch" class="touch hidden">
+        <div class="stick" data-stick><div class="knob"></div></div>
+        <div class="tbtns"><button data-btn="step" class="t-run">RUN</button><button data-btn="burst" class="t-burst">BURST</button></div>
+      </div>
+
+      <!-- ===== 開発パネル（F1 / `） ===== -->
+      <div id="devpanel" class="devpanel hidden">
+        <pre data-dev></pre>
+        <div class="dev-btns">
+          <button data-dev-action="minus100">-100m</button>
+          <button data-dev-action="plus100">+100m</button>
+          <button data-dev-action="next">Next Modifier</button>
+          <button data-dev-action="clear">Clear Modifiers</button>
+          <button data-dev-action="freeze">Freeze</button>
+          <button data-dev-action="step">Step</button>
+          <button data-dev-action="autopilot">Autopilot</button>
+          <button data-dev-action="restart">Restart</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
