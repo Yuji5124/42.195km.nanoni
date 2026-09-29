@@ -20,7 +20,7 @@ defineModifiers([
     intensity: [0.8, 1],
     weight: 0.8,
     synergy: ['tvBroadcast', 'wrongCam'],
-    nn: { name: '一人だけ巨大な観客', end: '一人だけ大きい観客がいるのに。', te: '大きい観客に見られて', subj: '大きな観客が', adv: '大きな観客の前を', pred: '大きな観客に見られている' },
+    nn: { name: '一人だけ巨大な観客', end: '一人だけ大きい観客がいるのに。', te: '大きい観客に見られて', subj: '大きな観客が', adv: '大きな観客の前で', pred: '大きな観客に見られている' },
     apply: (P, k, inst) => {
       crowdCam(P, inst);
       P.crowd.giantOne = Math.max(P.crowd.giantOne, k);
@@ -35,7 +35,7 @@ defineModifiers([
     duration: [6, 10],
     weight: 1.3,
     synergy: ['giantPlayer', 'firstPerson', 'fisheye', 'tinyAll'],
-    nn: { name: '巨人の観客', end: '観客が巨人なのに。', te: '観客が巨人になって', subj: '巨人の観客が', adv: '巨人たちの前を', pred: '巨人に見下ろされている' },
+    nn: { name: '巨人の観客', end: '観客が巨人なのに。', te: '観客が巨人になって', subj: '巨人の観客が', adv: '巨人たちの前で', pred: '巨人に見下ろされている' },
     apply: (P, k, inst) => {
       crowdCam(P, inst);
       P.crowd.giant *= lerp(1, 3.3, k);
@@ -65,7 +65,7 @@ defineModifiers([
     duration: [7, 11],
     weight: 1.1,
     synergy: ['drone', 'topDown', 'directorCam'],
-    nn: { name: 'ウェーブ', end: 'ウェーブが止まらないのに。', te: 'ウェーブが起きて', adv: 'ウェーブの中を', pred: 'ウェーブに包まれている' },
+    nn: { name: 'ウェーブ', end: 'ウェーブが止まらないのに。', te: 'ウェーブが起きて', adv: 'ウェーブの中で', pred: 'ウェーブに包まれている' },
     apply: (P, k, inst) => {
       crowdCam(P, inst);
       P.crowd.wave = Math.max(P.crowd.wave, k);
@@ -80,7 +80,7 @@ defineModifiers([
     minDistance: 150,
     duration: [5, 8],
     synergy: ['cctvCam', 'oldFilm', 'dawn'],
-    nn: { name: '固まる観客', end: '観客が止まっているのに。', te: '観客が固まって', subj: '固まった観客が', adv: '止まった観客の前を', pred: '観客に無視されている' },
+    nn: { name: '固まる観客', end: '観客が止まっているのに。', te: '観客が固まって', subj: '固まった観客が', adv: '止まった観客の前で', pred: '観客に無視されている' },
     apply: (P, k, inst) => {
       crowdCam(P, inst);
       P.crowd.freeze = Math.max(P.crowd.freeze, k > 0.4 ? 1 : 0);
@@ -123,7 +123,7 @@ defineModifiers([
     minDistance: 150,
     duration: [6, 9],
     synergy: ['rhythmHud', 'rainbow'],
-    nn: { name: '揃いすぎる観客', end: '観客の動きが揃いすぎなのに。', te: '観客がぴったり揃って', subj: '揃いすぎた観客が', adv: '揃った拍手の中を', pred: '揃った拍手を浴びている' },
+    nn: { name: '揃いすぎる観客', end: '観客の動きが揃いすぎなのに。', te: '観客がぴったり揃って', subj: '揃いすぎた観客が', adv: '揃った拍手の中で', pred: '揃った拍手を浴びている' },
     apply: (P, k, inst) => {
       crowdCam(P, inst);
       P.crowd.sync = Math.max(P.crowd.sync, k);

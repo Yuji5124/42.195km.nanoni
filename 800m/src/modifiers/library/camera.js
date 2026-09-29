@@ -81,6 +81,7 @@ defineModifiers([
       P.post.noise = Math.max(P.post.noise, 0.07 * k);
       P.post.fisheye = Math.max(P.post.fisheye, 0.25 * k);
       P.ui.rec = on(inst);
+      P.audio.lowpass = Math.max(P.audio.lowpass, 0.3 * k);
     },
   },
   {

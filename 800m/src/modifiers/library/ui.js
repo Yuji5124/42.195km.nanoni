@@ -95,7 +95,7 @@ defineModifiers([
     intensity: [1, 1],
     weight: 0.7,
     synergy: ['mirrorView', 'tvBroadcast'],
-    nn: { name: '鏡文字のスコアボード', end: 'スコアボードが鏡文字なのに。', te: 'スコアボードが鏡文字で', adv: '鏡文字の下を', pred: '鏡文字で表示されている' },
+    nn: { name: '鏡文字のスコアボード', end: 'スコアボードが鏡文字なのに。', te: 'スコアボードが鏡文字で', adv: '鏡文字の下で', pred: '鏡文字で表示されている' },
     apply: (P, k, inst) => {
       if (on(inst)) P.ui.boardMirror = true;
     },

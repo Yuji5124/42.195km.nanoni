@@ -12,7 +12,8 @@
     "race-test": "vite build && node 800m/tools/raceTest.mjs",
     "filmstrip": "vite build && node 800m/tools/filmstrip.mjs",
     "benchmark": "vite build && node 800m/tools/benchmark.mjs",
-    "gallery": "vite build && node 800m/tools/gallery.mjs"
+    "gallery": "vite build && node 800m/tools/gallery.mjs",
+    "mobile": "vite build && node 800m/tools/mobile.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

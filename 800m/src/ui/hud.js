@@ -121,6 +121,14 @@ export class Hud {
     this.timers[id] = setTimeout(() => el.classList.remove(cls), ms);
   }
 
+  // 「なのに。」とカメララベルを今すぐ消す（ラスト 40m）
+  clearTexts() {
+    for (const id of ['nanoni', 'combo', 'camlabel']) {
+      clearTimeout(this.timers[id]);
+      $(`#${id}`).classList.remove('show');
+    }
+  }
+
   nanoni(text) {
     this.flash('nanoni', text);
   }

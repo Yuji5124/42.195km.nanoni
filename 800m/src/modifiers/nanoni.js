@@ -73,6 +73,17 @@ export class NanoniVoice {
 
   update(dt) {
     const st = this.getState();
+    // ラスト 40m: 文字も片付ける（言いかけの文も捨てる）
+    if (st.finale) {
+      if (!this.quiet) {
+        this.quiet = true;
+        this.pending = [];
+        this.queue = [];
+        this.hud.clearTexts();
+      }
+      return;
+    }
+    this.quiet = false;
     // 同じフレームに始まった Modifier はまとめて 1 つの文に
     if (this.pending.length) {
       const started = this.pending;

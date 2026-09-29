@@ -98,6 +98,7 @@ defineModifiers([
       P.post.vignette = Math.max(P.post.vignette, 0.75 * k);
       P.post.exposure *= 1 + 0.3 * k + 0.08 * k * Math.sin(ctx.time * 37) * Math.sin(ctx.time * 11);
       P.post.contrast *= 1 + 0.15 * k;
+      P.audio.lowpass = Math.max(P.audio.lowpass, 0.45 * k); // 古いスピーカーの音
       if (on(inst) && k > 0.3) P.post.lowFps = P.post.lowFps ? Math.min(P.post.lowFps, 18) : 18;
     },
   },

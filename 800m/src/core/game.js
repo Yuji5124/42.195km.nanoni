@@ -25,6 +25,7 @@ import { PostProcessing } from '../fx/postProcessing.js';
 import { GLOBAL_UNIFORMS } from '../fx/materialPatch.js';
 import { createPresentation, resetPresentation } from '../modifiers/presentation.js';
 import { REGISTRY, validateRegistry } from '../modifiers/library/index.js';
+import { resolveModifier } from '../modifiers/registry.js';
 import { ModifierManager } from '../modifiers/modifierManager.js';
 import { ChaosDirector, FINALE } from '../modifiers/chaosDirector.js';
 import { NanoniVoice } from '../modifiers/nanoni.js';
@@ -32,6 +33,8 @@ import { TvDirector } from '../camera/tvDirector.js';
 import { Floors } from '../stadium/floors.js';
 import { Weather } from '../fx/weather.js';
 import { Hud } from '../ui/hud.js';
+import { Announcer } from '../ui/announcer.js';
+import { AudioEngine } from '../audio/audioEngine.js';
 
 // Game: 組み立てと配線だけの薄い層。
 //   RaceCore（壊れない） ← 意図（入力 / Bot） … 1/60 秒固定
@@ -104,6 +107,12 @@ export class Game {
       manager: this.mods,
     }));
     this.tv = new TvDirector();
+    this.audio = new AudioEngine(this.bus, { muted: this.params.mute });
+    this.announcer = new Announcer(this.bus, this.hud, () => ({ core: this.core, runners: RUNNERS, P: this.P, clock: this.clock.realTime }));
+    // ブラウザの決まり: 音は最初の操作のあとで鳴らせる
+    const unlock = () => this.audio.unlock();
+    addEventListener('pointerdown', unlock);
+    addEventListener('keydown', unlock);
     this.activeModifierIds = () => this.mods.ids;
     this.raceHistory = () => this.mods.history.map((h) => ({ ...h, label: `${h.name}（${h.d}m）` }));
     const problems = validateRegistry();
@@ -146,7 +155,11 @@ export class Game {
       this.post.flashOnce(0.35);
       this.shake = 0.3;
     });
-    bus.on(EV.RHYTHM, ({ grade }) => hud.step(grade));
+    bus.on(EV.RHYTHM, ({ grade }) => {
+      hud.step(grade);
+      // スマホ: 足音に合った時だけ小さく震える
+      if (grade === 'PERFECT' && this.input.isTouch && !this.autopilot) navigator.vibrate?.(12);
+    });
     bus.on(EV.FINISH, () => {
       this.finishRealTime = this.clock.realTime;
       this.post.flashOnce(0.5);
@@ -201,6 +214,7 @@ export class Game {
     this.chaos.reset(this.bank, this.params);
     if (this.chaos.unknown?.length) console.warn('[modifiers] unknown:', this.chaos.unknown);
     this.voice.reset();
+    this.announcer?.reset();
     this.tv.reset(this.bank, this.core);
     this.cameraSubject = -1;
     this.lastCamLabel = '';
@@ -221,6 +235,7 @@ export class Game {
     $('#result').classList.add('hidden');
     this.hud.show(true);
     $('#touch').classList.toggle('hidden', !this.input.isTouch);
+    document.body.classList.toggle('touch-on', this.input.isTouch);
     const rng = this.bank.stream('start');
     if (this.params.distance > 0) {
       // 途中開始: 号砲なしで走っている状態から
@@ -315,6 +330,7 @@ export class Game {
   handleGlobalInput() {
     const inp = this.input;
     if (inp.pressed('debug')) this.toggleDev();
+    if (inp.pressed('mute')) this.hud.camLabel(this.audio.toggleMute() ? '音: OFF' : '音: ON', 1200);
     if (this.phase === 'title' && inp.pressed('confirm') && document.activeElement?.id !== 'seedInput') this.startRace();
     if (this.phase === 'result') {
       if (inp.pressed('retry')) this.restart(this.seed);
@@ -417,6 +433,20 @@ export class Game {
       this.lastCamLabel = P.camera.label;
     }
     this.voice.update(dt);
+    this.announcer.update(dt);
+    this.audio.update(dt, {
+      running: core.running,
+      finished: p.finished,
+      d: p.d,
+      v: p.v,
+      stamina: p.stamina,
+      effort: p.effortEff,
+      stepFreq: p.stepFreq,
+      cheer: this.cheer,
+      audio: P.audio,
+      wind: P.world.wind,
+      near: this.nearRunners(),
+    });
     this.shake = Math.max(0, (this.shake ?? 0) - dt);
     this.post.update(dt, P.post);
 
@@ -451,6 +481,15 @@ export class Game {
       this.props.mirrored = P.ui.boardMirror;
       this.props.draw({ time: core.time, lap: `LAP ${p.d >= 400 ? 2 : 1} / 2`, leader: `1. ${leaderDef.en}` });
     }
+  }
+
+  // 主人公の近く（足音が聞こえる距離）にいる選手
+  nearRunners() {
+    const set = (this._near ??= new Set());
+    set.clear();
+    const p = this.core.player;
+    for (const r of this.core.runners) if (r !== p && Math.abs(r.d - p.d) < 3.5 && Math.abs(r.off - p.off) < 2.5) set.add(r.index);
+    return set;
   }
 
   resolveTarget(t) {
@@ -614,8 +653,8 @@ export class Game {
       // Modifier を直接動かす（ギャラリー撮影・テスト用）
       modifiers: {
         list: () => [...REGISTRY.values()].map((d) => ({ id: d.id, category: d.category, name: d.nn.name, legendary: d.legendary, big: d.big })),
-        start: (id, opts = {}) => !!g.mods.start(id, { force: true, source: 'debug', d: g.core.player.d, ...opts }),
-        stop: (id) => g.mods.stop(id),
+        start: (id, opts = {}) => !!g.mods.start(resolveModifier(id) ?? id, { force: true, source: 'debug', d: g.core.player.d, ...opts }),
+        stop: (id) => g.mods.stop(resolveModifier(id) ?? id),
         clear: (instant = true) => g.mods.clear({ instant }),
         active: () => g.mods.ids,
         history: () => g.mods.history,

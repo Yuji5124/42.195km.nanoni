@@ -58,7 +58,7 @@ defineModifiers([
     duration: [7, 10],
     big: true,
     synergy: ['fastForward', 'fastLegs'],
-    nn: { name: 'レースゲームになった', end: 'ハンドルがないのに。', te: 'レースゲームになって', adv: 'レースゲームの中を', pred: 'レースゲームになっている' },
+    nn: { name: 'レースゲームになった', end: 'ハンドルがないのに。', te: 'レースゲームになって', adv: 'レースゲームの中で', pred: 'レースゲームになっている' },
     start: (inst, ctx) => ctx.hud?.call('FINAL LAP', 1300),
     apply: (P, k, inst) => {
       if (!on(inst)) return;
@@ -103,7 +103,7 @@ defineModifiers([
     duration: [6, 8],
     big: true,
     synergy: ['crowdVanish', 'ghostPack'],
-    nn: { name: 'ホラーになった', end: 'ただの800mなのに。', te: 'ホラーになって', adv: '暗闇の中を', pred: '何かに追われている' },
+    nn: { name: 'ホラーになった', end: 'ただの800mなのに。', te: 'ホラーになって', adv: '暗闇の中で', pred: '何かに追われている' },
     apply: (P, k, inst, ctx) => {
       if (!on(inst)) return;
       P.camera.mode = 'REAR';

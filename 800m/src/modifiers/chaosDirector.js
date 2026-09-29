@@ -69,6 +69,12 @@ export class ChaosDirector {
 
   // レース開始の瞬間（URL で指定された Modifier はずっと出しっぱなし）
   begin(d) {
+    // 途中から始めた時（?distance=）は、もう過ぎた節目を起こさない
+    if (d >= this.firstAt) this.fired.add('first');
+    if (d > 400) this.fired.add('bell');
+    if (d > 600) this.fired.add('peak');
+    if (d > 720) this.fired.add('climax');
+    if (this.legend && d > this.legend.at) this.fired.add('legend');
     for (const id of this.pinned) this.manager.start(id, { pinned: true, force: true, source: 'url', d, intensity: REGISTRY.get(id).intensity[1], rng: this.rng });
   }
 

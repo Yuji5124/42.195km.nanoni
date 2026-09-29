@@ -18,6 +18,9 @@ defineModifiers([
     nn: { name: 'スローモーション', end: '世界がスローなのに。', te: 'スローになって', adv: 'スローで', pred: 'スローになっている' },
     apply: (P, k) => {
       P.time.sim *= lerp(1, 0.42, k);
+      P.audio.lowpass = Math.max(P.audio.lowpass, 0.35 * k);
+      P.audio.detune -= 500 * k;
+      P.audio.bpmMul *= lerp(1, 0.6, k);
     },
   },
   {
@@ -34,6 +37,8 @@ defineModifiers([
     nn: { name: '早送り', end: '早送りなのに。', te: '早送りになって', adv: '早送りで', pred: '早送りされている' },
     apply: (P, k) => {
       P.time.sim *= lerp(1, 1.5, k);
+      P.audio.detune += 400 * k;
+      P.audio.bpmMul *= lerp(1, 1.3, k);
     },
   },
 ]);

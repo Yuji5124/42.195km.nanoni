@@ -7,6 +7,7 @@ import './crowd.js';
 import './ui.js';
 import './time.js';
 import './genre.js';
+import './audio.js';
 import './legendary.js';
 
 import { REGISTRY } from '../registry.js';
