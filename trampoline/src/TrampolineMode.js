@@ -16,11 +16,22 @@ import { TrampolineJudges } from './TrampolineJudges.js';
 import { TrampolineHUD } from './TrampolineHUD.js';
 import { TrampolineAudio } from './TrampolineAudio.js';
 import { PHYS } from './TrampolinePhysics.js';
+import { TrampolineEventDirector } from './TrampolineEventDirector.js';
+import { EFFECTS } from './TrampolineEffects.js';
+import { EVENTS } from './data/events.js';
+import { TrampolineBackground } from './TrampolineBackground.js';
+import { TrampolineSky } from './TrampolineSky.js';
+import { TrampolineGhosts } from './TrampolineGhosts.js';
+import { TrampolineDrama } from './TrampolineDrama.js';
 
 // 『トランポリン、なのに。』のモード本体（状態の流れとループ）。
 //
 //   intro → ready → bounce（小さく弾む。SPACE で踏み込み）→ air（スロー + タイピング）→ landed → result → 次の試技
 //   10 回の試技のあと final。
+//
+// 「なのに」の演出はすべて data/events.js（表）→ TrampolineEventDirector（いつ起こすか）→ TrampolineEffects（中身）。
+// このファイルは「今、跳んだ / 打ち終えた / 落ち始めた / 着地した」を司令塔へ伝えるだけ。
+// テンポ（level）: 試技 1〜2 普通 → 3〜4 少し変 → 5〜6 かなり変 → 7〜 意味不明（→ 天井 OPEN → 空）
 //
 // 時間は 2 つ（TrampolineTime）: 世界の時間 gameDt（スロー・ヒットストップ）と UI の時間 realDt。
 // 選手・ベッド・観客は gameDt、カメラ・タイピング・HUD は realDt で動く。
@@ -90,6 +101,12 @@ export class TrampolineMode {
     const path = { toWorld: (s, x, y, out) => out.set(x, y, -s), sample: () => ({ x: 0, z: 0, theta: 0, cos: 1, sin: 0 }) };
     this.fxPlayer = { s: 0, x: 0, y: 0, dashing: false, boostTimer: 0, grounded: true };
     this.fx = new EffectManager(renderer, scene, this.camera, path);
+
+    this.sky = new TrampolineSky(scene);
+    this.bg = new TrampolineBackground(scene, this.arena, this.rng);
+    this.ghosts = new TrampolineGhosts(scene, this.athlete, isTouch ? 3 : 4);
+    this.drama = new TrampolineDrama(scene, this.arena, this.fx);
+    this.director = new TrampolineEventDirector(this, EVENTS, EFFECTS);
 
     this.scoring.onAdd((item) => this.onScore(item));
     this.bindUI();
@@ -179,6 +196,9 @@ export class TrampolineMode {
     this.scoring.reset();
     this.scoring.onAdd((item) => this.onScore(item));
     this.cheer.reset();
+    this.director.reset();
+    this.dramaSeen = new Set();
+    for (const id of (this.params.get('event') ?? '').split(',').filter(Boolean)) this.director.force(id);
     this.hud.setTotal(0);
     this.attempt = +(this.params.get('attempt') ?? 1) - 1;
     this.nextAttempt();
@@ -187,15 +207,20 @@ export class TrampolineMode {
   nextAttempt() {
     this.hud.hideResult();
     this.judges.hide();
+    this.director.clear();
+    this.bg.clearJump();
     this.attempt++;
     if (this.attempt > ATTEMPTS) return this.toFinal();
     this.setPhase('ready');
     this.scoring.begin();
+    this.director.beginJump();
+    this.director.moment('attempt');
     this.hud.setAttempt(this.attempt, ATTEMPTS);
     this.hud.setStats({ height: 0, rotation: 0, landing: '-', score: 0 });
     this.arena.drawBoard({ name: 'SAMURAI  JPN', attempt: this.attempt, of: ATTEMPTS, last: this.scoring.history.at(-1)?.sum ?? 0, total: this.scoring.total });
     this.hud.comment(CALLS[(this.attempt - 1) % CALLS.length].replace('{n}', this.attempt), 2.6);
-    this.cam.set('WIDE', { dur: 1.1 });
+    // 試技の前は中継らしく、ときどき別の角度から
+    this.cam.set(this.attempt % 3 === 0 ? 'JUDGE' : this.attempt % 3 === 1 ? 'WIDE' : 'HIGH', { dur: 1.1 });
     this.warm = 0;
     this.athlete.physics.setNextApex(WARMUP[0]);
     this.stompArmed = false;
@@ -267,16 +292,89 @@ export class TrampolineMode {
     const tFall = Math.sqrt((2 * 0.6 * apex) / PHYS.g);
     const budget = lerp(4.2, 6.8, q);
     const slow = clamp((tUp + tFall) / budget, 0.06, 0.3);
-    this.air = { apex, maxH: 0, q, slow, slowMul: 1, descent: false, t: 0, faceT: 1.05, rotShown: 0 };
+    this.air = { apex, maxH: 0, q, slow, slowMul: 1, descent: false, t: 0, faceT: 1.05, wordAt: -9 };
     this.time.to(slow, 9);
     this.cam.set('FACE', { cut: true });
     this.sfx.whoosh(1);
     this.sfx.ooh(1 + q);
-    const level = this.attempt <= 2 ? 0 : this.attempt <= 4 ? 1 : 2;
-    const first = this.attempt === 1 ? 'FLIP' : this.attempt === 2 ? 'SPIN' : null;
-    this.typing.begin(level, this.time.real, first);
+    this.typing.begin(Math.min(2, this.level), this.time.real, this.firstWord());
     this.athlete.setTargets({ flip: 0, twist: 0, spin: 0 });
+    // 背景の予定（この跳躍の間のどこかで、勝手に起きる）。見せ場の保証が要る時だけ頂点に合わせる
+    const force = new Set();
+    for (const e of EVENTS) {
+      if (e.on === 'sync' && e.guarantee && this.attempt >= e.guarantee && !this.director.seen.has(e.id) && this.level >= (e.level ?? 0)) force.add(e.kind);
+    }
+    for (const id of this.director.forced) if (this.director.byId[id]?.kind) force.add(this.director.byId[id].kind);
+    this.bg.scheduleJump({ tApex: tUp, tLand: tUp * 2, level: this.level, force });
+    this.director.beginJump();
+    this.director.moment('takeoff');
     void ph;
+  }
+
+  // テンポ: 最初はちゃんとしたスポーツ → 少し変 → かなり変 → 意味不明
+  get level() {
+    const a = this.attempt;
+    let l = a <= 2 ? 0 : a <= 4 ? 1 : a <= 6 ? 2 : 3;
+    if (l < 3 && a >= 4 && this.director.count >= 20) l++; // なのにが続くと、早めに壊れていく
+    return l;
+  }
+
+  // 最初の単語（最初の 2 回は練習、4 回目はバレリーナを見せる）
+  firstWord() {
+    if (this.attempt === 1) return 'FLIP';
+    if (this.attempt === 2) return 'SPIN';
+    if (this.attempt === 4 && !this.director.seen.has('BALLERINA')) return 'BALLERINA';
+    if (this.attempt === 8) return 'FLIP';
+    return null;
+  }
+
+  // 空中のスロー = 踏み込みで決まる基本 × 自分で打った SLOW × イベント（バレリーナ）
+  applyAirScale() {
+    const a = this.air;
+    if (!a || this.phase !== 'air' || a.descent || a.capped) return;
+    this.time.to(clamp(a.slow * a.slowMul * this.director.timeScale, 0.03, 0.3), 5);
+  }
+
+  // イベントが終わった後に戻るカメラ
+  defaultShot() {
+    const hold = this.director.active.find((a) => a.ev.holdCamera && a.ev.cameraMode);
+    if (hold) return hold.ev.cameraMode;
+    switch (this.phase) {
+      case 'air':
+        if (this.cam.faceLock) return 'FACE';
+        return this.director.isActive('BALLERINA') ? 'ORBIT' : 'WIDE';
+      case 'result':
+        return 'RESULT';
+      case 'intro':
+      case 'final':
+        return 'INTRO';
+      default:
+        return 'WIDE';
+    }
+  }
+
+  // イベントの条件に渡す「今の状況」
+  eventCtx(extra) {
+    const ath = this.athlete;
+    const ph = ath.physics;
+    const sum = this.typing.summary();
+    return {
+      level: this.level,
+      attempt: this.attempt,
+      phase: this.phase,
+      airT: this.air?.t ?? 0,
+      ascending: ph.vy > 0 && !ph.contact,
+      height: ph.height,
+      rotSpeed: ath.rotSpeed,
+      visualRotSpeed: ath.rotSpeed * this.time.scale,
+      timeScale: this.time.scale,
+      revs: (Math.abs(ath.flip) + Math.abs(ath.twist) + Math.abs(ath.spin)) / TAU,
+      attemptSum: this.scoring.attemptSum,
+      failed: this.landing === 'FAIL',
+      typedNothing: !sum.correct && !sum.miss,
+      words: sum.words,
+      ...extra,
+    };
   }
 
   updateAir(realDt) {
@@ -288,7 +386,7 @@ export class TrampolineMode {
     // 顔のアップは跳んだ直後だけ → 中継のカメラへ
     if (a.faceT > 0) {
       a.faceT -= realDt;
-      if (a.faceT <= 0 && this.cam.shot === 'FACE') this.cam.set('WIDE', { dur: 0.9 });
+      if (a.faceT <= 0 && this.cam.shot === 'FACE' && !this.cam.faceLock) this.cam.set(this.defaultShot(), { dur: 0.9 });
     }
     // タイピング（UI の時間で受け付ける）
     for (const ch of this.input.takeLetters()) this.typeKey(ch);
@@ -300,7 +398,14 @@ export class TrampolineMode {
     if (!a.descent && ph.vy < 0 && ph.height < a.maxH * 0.4) {
       a.descent = true;
       this.time.to(1, 2.4);
+      this.director.moment('descent');
     }
+    // 空中が長くなりすぎたら（SLOW・HIGH・バレリーナの重ねがけ）、世界の時間を少しずつ戻す
+    if (!a.capped && !a.descent && a.t > (this.director.isActive('BALLERINA') ? 9 : 7)) {
+      a.capped = true;
+      this.time.to(1, 1.4);
+    }
+    this.director.moment('air');
     this.hud.showWord(this.typing, { touch: this.input.isTouch });
   }
 
@@ -332,22 +437,24 @@ export class TrampolineMode {
     const a = this.air;
     const ph = this.athlete.physics;
     this.lastWordAt = this.time.real;
+    a.wordAt = this.time.game;
     this.sfx.word(this.typing.done.length);
     this.cheer.hype(0.03);
-    if (d.lift) {
-      // 空中なのに、さらに上へ
+    if (d.lift && (a.lifts = (a.lifts ?? 0) + 1) <= 2) {
+      // 空中なのに、さらに上へ（1 回の跳躍で 2 回まで）
       ph.vy = Math.max(ph.vy, 0) + d.lift;
       if (a.descent) {
         a.descent = false;
-        this.time.to(a.slow * a.slowMul, 5);
+        this.applyAirScale();
       }
       this.sfx.whoosh(1.2);
     }
     if (d.slow) {
       a.slowMul *= d.slow;
-      if (!a.descent) this.time.to(clamp(a.slow * a.slowMul, 0.035, 0.3), 5);
+      this.applyAirScale();
     }
-    void fast;
+    if (d.pose) this.arena.flashStorm(0.5);
+    this.director.moment('word', { word, fast });
   }
 
   // 着地
@@ -370,6 +477,9 @@ export class TrampolineMode {
     if (failed) this.sfx.fail();
     else this.sfx.land(grade === 'PERFECT');
     this.scoreJump(err, grade, a);
+    this.director.land();
+    this.director.moment('land');
+    this.bg.clearJump();
     const sum = this.scoring.attemptSum;
     this.cheer.hype(clamp(sum / 9000, 0.05, 0.6));
     if (!failed) this.fx.confettiBurst({ x: 0, y: 1, z: 0 }, Math.min(260, 40 + sum / 40), 6);
@@ -384,10 +494,11 @@ export class TrampolineMode {
     // 打ち終わった単語（同じ単語はまとめる）
     const counts = {};
     for (const w of sum.words) counts[w] = (counts[w] ?? 0) + 1;
-    for (const [w, n] of Object.entries(counts)) s.add('TECHNIQUE', n > 1 ? `${w} ×${n}` : w, WORDS[w].tech * n * (n >= 3 ? 1.25 : 1));
+    // 同じ技の繰り返しは少しずつ価値が下がる（1, 0.8, 0.64, …）→ 打ちまくるだけでは点が暴走しない
+    for (const [w, n] of Object.entries(counts)) s.add('TECHNIQUE', n > 1 ? `${w} ×${n}` : w, (WORDS[w].tech * (1 - Math.pow(0.8, n))) / 0.2);
     if (sum.partial) s.add('TECHNIQUE', `${sum.partial}…（途中）`, WORDS[this.typing.word].tech * this.typing.progress * 0.5);
-    if (sum.correct) s.add('TYPING', `TYPING ${sum.correct}文字`, sum.correct * 30);
-    if (sum.fastWords) s.add('TYPING', 'FAST INPUT', sum.fastWords * 250);
+    if (sum.correct) s.add('TYPING', `TYPING ${sum.correct}文字`, Math.min(60, sum.correct) * 30);
+    if (sum.fastWords) s.add('TYPING', 'FAST INPUT', Math.min(6, sum.fastWords) * 250);
     if (sum.miss === 0 && sum.correct >= 4) s.add('TYPING', 'NO MISS', 300);
     // 同じ単語の連続（FLIP FLIP FLIP）
     let run = 1;
@@ -405,11 +516,7 @@ export class TrampolineMode {
     if (grade === 'PERFECT') s.add('LANDING', 'PERFECT LANDING', 1000);
     else if (grade === 'GOOD') s.add('LANDING', 'GOOD LANDING', 500);
     else if (grade === 'OK') s.add('LANDING', 'LANDING', 200);
-    else {
-      s.add('ACCIDENT', '着地失敗', 150);
-      this.nanoni('着地失敗、なのに。', 'NANONI', '着地失敗、なのに加点', 350);
-    }
-    if (!sum.correct && !sum.miss) this.nanoni('何もしなかった、なのに。', 'NANONI', 'ただ跳んだだけ、なのに', 150);
+    else s.add('ACCIDENT', '着地失敗', 150); // 「着地失敗、なのに。」は data/events.js（LANDING_FAIL）
     // 審判（execution 0〜10）
     let e = 9.35 - err * 5 - sum.miss * 0.08 + Math.min(0.45, sum.words.length * 0.09);
     if (grade === 'FAIL') e = 5.2 + this.rng.next() * 1.2;
@@ -452,7 +559,8 @@ export class TrampolineMode {
 
   autoType(realDt) {
     if (!this.auto || !this.typing.active) return;
-    this.autoAcc = (this.autoAcc ?? 0) + realDt * (this.params.get('cps') ? +this.params.get('cps') : 6.5);
+    // ?fast で世界を早送りしても、打つ速さ（文字/秒）は人間のまま
+    this.autoAcc = (this.autoAcc ?? 0) + (realDt / this.fast) * (this.params.get('cps') ? +this.params.get('cps') : 5.5);
     while (this.autoAcc >= 1) {
       this.autoAcc -= 1;
       const t = this.typing;
@@ -496,7 +604,10 @@ export class TrampolineMode {
         if (input.confirm()) this.startGame();
         break;
       case 'ready':
-        if (this.phaseT > 1.4) this.setPhase('bounce');
+        if (this.phaseT > 1.4) {
+          this.setPhase('bounce');
+          this.cam.set('WIDE', { dur: 0.8 });
+        }
         break;
       case 'bounce': {
         this.bounceT += realDt;
@@ -514,7 +625,8 @@ export class TrampolineMode {
         this.updateAir(realDt);
         break;
       case 'landed':
-        if (this.phaseT > (this.landing === 'FAIL' ? 2.4 : 1.7)) this.finishAttempt();
+        // 観客ドラマの途中なら、終わるまで待つ（選手は背景で跳び続ける）
+        if (this.phaseT > (this.landing === 'FAIL' ? 2.4 : 1.7) && !this.director.blocking) this.finishAttempt();
         break;
       case 'result':
         if (this.phaseT > 4.6 || (this.phaseT > 1 && input.confirm()) || (this.auto && this.phaseT > 2.2)) this.nextAttempt();
@@ -528,15 +640,33 @@ export class TrampolineMode {
     // ---- 世界（gameDt）
     const stompHeld = (this.stompArmed || this.stompFired) && ph.contact;
     const hurry = this.phase === 'air' && ph.vy < 0 ? clamp(1 - ph.timeToLand() / 0.45, 0, 1) : 0;
-    const boost = 1 + Math.min(2.5, this.typing.fastWords * 0.35);
+    const boost = 1 + Math.min(3, this.typing.fastWords * 0.5);
     const wasContact = ph.contact;
     const events = ath.update(gameDt, { stomp: stompHeld, hurry, boost });
     this.contactT = ph.contact ? (wasContact ? this.contactT + gameDt : 0) : 0;
     for (const ev of events) this.onPhysics(ev);
+    this.ghosts.update(gameDt);
+    // 背景（勝手に動いている）→ 偶然の一致
+    const trick = ath.trick;
+    const syncs = this.bg.update(gameDt, {
+      airborne: this.phase === 'air',
+      vy: ph.vy,
+      height: ph.height,
+      wordAge: this.air ? this.time.game - this.air.wordAt : 9,
+      pose: trick === 'star' || trick === 'ballerina',
+      rotSpeed: ath.rotSpeed,
+      timeToLand: ph.timeToLand(),
+    });
+    for (const sy of syncs) {
+      this.cam.syncPoint.copy(sy.point);
+      this.director.moment('sync', { sync: sy });
+    }
     this.bed.update(gameDt, ph.d, ath.x, ath.z);
     this.cheer.update(gameDt, { running: false, crowdDensity: 0.7 });
     this.arena.update(gameDt, this.cheer.excitement);
     this.judges.update(realDt);
+    this.drama.update(realDt, this.hud);
+    this.director.update(realDt);
 
     // ---- HUD
     if (this.phase === 'air' || this.phase === 'landed' || this.phase === 'bounce') {
@@ -549,6 +679,7 @@ export class TrampolineMode {
     // ---- カメラ（realDt）
     ath.com(this._com ?? (this._com = new THREE.Vector3()));
     this.cam.update(realDt, { com: this._com, head: ath.headPos, headFwd: ath.headFwd, headUp: ath.headUp, faceDir: ath.faceDir, height: ph.height, airborne: ath.airborne });
+    this.sky.follow(this.camera);
 
     // ---- 音・エフェクト（realDt）
     this.audio.update(realDt, { excitement: this.cheer.excitement, playing: this.phase !== 'intro' });
@@ -597,6 +728,10 @@ export class TrampolineMode {
       fps: Math.round(this.fx.fps ?? 0),
       quality: this.fx.quality,
       calls: this.renderer.info.render.calls,
+      level: this.level,
+      rot: +this.athlete.rotSpeed.toFixed(1),
+      events: this.director.active.map((a) => a.ev.id),
+      seen: [...this.director.seen],
     };
   }
 }

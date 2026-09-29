@@ -137,7 +137,7 @@ body {
 }
 .zone {
   position: absolute;
-  top: calc(var(--safe-t) + 34px);
+  top: calc(var(--safe-t) + 84px);
   left: var(--safe-l);
   padding: 3px 10px;
   font-size: 13px;
@@ -156,13 +156,13 @@ body {
 .word {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-b) + 150px);
+  bottom: calc(var(--safe-b) + 78px);
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
 }
 .w-text {
-  font-size: clamp(38px, 7.4vw, 78px);
+  font-size: clamp(32px, 5.8vw, 64px);
   font-weight: 700;
   letter-spacing: 0.16em;
   line-height: 1;
@@ -381,7 +381,7 @@ body {
 .caption {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-b) + 150px);
+  top: 56%;
   transform: translateX(-50%);
   padding: 4px 14px;
   font-family: var(--font-jp);
@@ -395,10 +395,10 @@ body {
 }
 .commentary {
   position: absolute;
-  left: 50%;
-  bottom: calc(var(--safe-b) + 64px);
-  transform: translateX(-50%) translateY(8px);
-  max-width: min(760px, 92vw);
+  left: var(--safe-l);
+  top: calc(var(--safe-t) + 40px);
+  transform: translateY(-6px);
+  max-width: min(620px, 62vw);
   width: max-content;
   padding: 8px 14px;
   background: rgba(8, 8, 20, 0.8);
@@ -411,7 +411,7 @@ body {
 }
 .commentary.show {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: none;
 }
 .commentary .mic {
   display: inline-block;
@@ -787,9 +787,7 @@ body[data-phase='final'] .mute-btn {
   .feed-item .lbl {
     font-size: 12px;
   }
-  .word {
-    bottom: calc(var(--safe-b) + 170px);
-  }
+
   .result {
     top: auto;
     bottom: calc(var(--safe-b) + 110px);
@@ -802,6 +800,9 @@ body[data-phase='final'] .mute-btn {
     animation: none;
   }
   .commentary {
-    bottom: calc(var(--safe-b) + 116px);
+    max-width: 92vw;
+  }
+  .word {
+    bottom: calc(var(--safe-b) + 150px);
   }
 }

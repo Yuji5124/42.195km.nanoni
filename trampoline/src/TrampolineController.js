@@ -192,6 +192,18 @@ export class TrampolineController {
     this.headUp.set(0, 1, 0).applyQuaternion(this._hq);
   }
 
+  // 本体の透明度（スローなのに見えない）
+  setOpacity(a) {
+    const m = this.model.material;
+    const tr = a < 0.999;
+    if (m.transparent !== tr) {
+      m.transparent = tr;
+      m.depthWrite = !tr;
+      m.needsUpdate = true;
+    }
+    m.opacity = a;
+  }
+
   // 重心の位置（カメラ用）
   com(out) {
     return this.body.getWorldPosition(out);

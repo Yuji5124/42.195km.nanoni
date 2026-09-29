@@ -124,6 +124,49 @@ export class TrampolineArena {
     this.buildLights();
     this.roofOpen = 0; // 0 = 閉 / 1 = 全開
     this.roofTarget = 0;
+    this.wave = { on: false, angle: 0, speed: 1, left: 0, amt: 0 };
+    this.buildFlashes();
+  }
+
+  // 観客席のカメラのフラッシュ（点滅する小さな光。1 draw call）
+  buildFlashes() {
+    const N = 260;
+    const pos = new Float32Array(N * 3);
+    const rng = createRng(77);
+    this.flashData = [];
+    for (let i = 0; i < N; i++) {
+      const k = rng.int(1, ARENA.tiers - 2);
+      const a = rng.range(0, Math.PI * 2);
+      const r = ARENA.standR + (k + 0.5) * ARENA.depth;
+      pos.set([Math.cos(a) * r, ARENA.y0 + k * ARENA.rise + 1.1, Math.sin(a) * r], i * 3);
+      this.flashData.push({ t: rng.range(0, 6) });
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.flashAlpha = new Float32Array(N);
+    geo.setAttribute('alpha', new THREE.BufferAttribute(this.flashAlpha, 1).setUsage(THREE.DynamicDrawUsage));
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: 'attribute float alpha; varying float vA; void main(){ vA = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = alpha * 900.0 / max(1.0, -mv.z); gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'varying float vA; void main(){ float d = length(gl_PointCoord - 0.5); float a = smoothstep(0.5, 0.0, d) * vA; if (a < 0.01) discard; gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * 2.0, a); }',
+    });
+    this.flashes = new THREE.Points(geo, mat);
+    this.flashes.frustumCulled = false;
+    this.stands.add(this.flashes);
+    this.flashRate = 0.03;
+    this.storm = 0;
+  }
+
+  // フラッシュが一斉に（ポーズ・着地）
+  flashStorm(sec = 0.8) {
+    this.storm = Math.max(this.storm, sec);
+  }
+
+  // 照明の演出（ライトバンクが順番に光って一周 → 最後に全部が光る）。世界の時間で dur 秒
+  lightShow(dur = 2.4) {
+    this.show = { t: 0, dur };
   }
 
   buildFloor() {
@@ -138,7 +181,7 @@ export class TrampolineArena {
   }
 
   buildStands() {
-    const crowdMats = [createStandCrowdMaterial(makeStandCrowdTexture(3), this.crowdUniforms), new THREE.MeshLambertMaterial({ color: 0x33415e })];
+    const crowdMats = [this.waveCrowdMaterial(), new THREE.MeshLambertMaterial({ color: 0x33415e })];
     this.bowl = new THREE.Mesh(buildBowlGeometry(), crowdMats);
     this.bowl.frustumCulled = false;
     this.stands = new THREE.Group(); // 「観客席全体が揺れる」はこのグループを揺らす
@@ -156,6 +199,33 @@ export class TrampolineArena {
     this.stands.add(rail);
   }
 
+  // 1500m の板の観客（createStandCrowdMaterial）に「ウェーブ」を足したもの。
+  // 元のシェーダーの書き換えをそのまま使い、その後に 1 行だけ足す（1500m 側のマテリアルは変わらない）
+  waveCrowdMaterial() {
+    const mat = createStandCrowdMaterial(makeStandCrowdTexture(3), this.crowdUniforms);
+    this.waveU = { uWave: { value: 0 }, uWaveAmt: { value: 0 } };
+    const base = mat.onBeforeCompile;
+    mat.onBeforeCompile = (shader, renderer) => {
+      base(shader, renderer);
+      shader.uniforms.uWave = this.waveU.uWave;
+      shader.uniforms.uWaveAmt = this.waveU.uWaveAmt;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vTWorld;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nvTWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vTWorld;\nuniform float uWave;\nuniform float uWaveAmt;')
+        .replace(
+          'cuv.y = clamp(cuv.y - hop * (0.06 + uExcite * 0.2), 0.0, 0.999);',
+          `float wd = abs(mod(atan(vTWorld.z, vTWorld.x) - uWave + 3.14159265, 6.2831853) - 3.14159265);
+        float wv = smoothstep(0.3, 0.0, wd) * uWaveAmt;
+        cuv.y = clamp(cuv.y - hop * (0.06 + uExcite * 0.2) - wv * 0.32, 0.0, 0.999);`
+        )
+        .replace('diffuseColor *= sampledDiffuseColor;', 'diffuseColor *= sampledDiffuseColor;\n        diffuseColor.rgb *= 1.0 + wv * 0.7;');
+    };
+    mat.customProgramCacheKey = () => 'stand-crowd-tramp-wave';
+    return mat;
+  }
+
   // 屋根: 外側のリング（固定）+ 開口部を覆う 2 枚のパネル（左右へスライドして開く）
   buildRoof() {
     const tex = roofTexture();
@@ -171,10 +241,14 @@ export class TrampolineArena {
     lip.position.y = ROOF.y - 0.4;
     this.roof.add(lip);
     // 2 枚のパネル（半円 + 梁）。x = 0 の線で左右に分かれる
+    // 開閉するパネルは半透明の膜（ETFE）: 閉じていても、夜空・飛行機・花火がうっすら見える
+    const glassTex = roofTexture();
+    glassTex.repeat.set(5, 5);
+    const glass = new THREE.MeshBasicMaterial({ map: glassTex, color: 0x6f86b8, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
     this.panels = [];
     for (const side of [-1, 1]) {
       const g = new THREE.Group();
-      const half = new THREE.Mesh(new THREE.CircleGeometry(ROOF.open + 0.8, 48, side > 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI).rotateX(Math.PI / 2), mat);
+      const half = new THREE.Mesh(new THREE.CircleGeometry(ROOF.open + 0.8, 48, side > 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI).rotateX(Math.PI / 2), glass);
       g.add(half);
       // 厚みのある梁（大きな構造物に見えるように）
       for (let k = 0; k < 5; k++) {
@@ -310,6 +384,55 @@ export class TrampolineArena {
     this.scene.add(this.spot, this.spot.target);
   }
 
+  // ---- 観客席の 3D の人形: 隠す（観客ドラマ）/ ウェーブ / 一人だけ飛ぶ
+  hideSeats(list, hide) {
+    for (const i of list) this.seats[i].hidden = hide;
+    this.seatsDirty = true;
+  }
+
+  writeSeats() {
+    const arr = this.crowd.instanceMatrix.array;
+    const wave = this.wave;
+    for (let i = 0; i < this.seats.length; i++) {
+      const s = this.seats[i];
+      let dy = 0;
+      if (wave.amt > 0) {
+        const d = Math.abs(((s.a - wave.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        dy = Math.max(0, 1 - d / 0.3) * 0.55 * wave.amt;
+      }
+      writeYawMatrix(arr, i, s.x, s.y + dy, s.z, s.yaw, s.hidden ? 0 : s.scale);
+    }
+    this.crowd.instanceMatrix.needsUpdate = true;
+    this.seatsDirty = false;
+  }
+
+  // 観客ウェーブ: angle から一周（speed rad/s、世界の時間）
+  startWave(angle, speed = 1.1, laps = 1.2) {
+    this.wave.angle = angle;
+    this.wave.speed = speed;
+    this.wave.left = laps * Math.PI * 2;
+    this.wave.on = true;
+  }
+
+  // 一人だけ異常に高く跳ぶ観客（手前の席から）
+  launchFlyer(rng) {
+    if (!this.flyer) {
+      this.flyer = createHumanInstances(1, this.crowdMat, 'high');
+      applyLook(this.flyer, 0, { shirt: 0xffd23f, pants: 0x1f2a44, skin: 0xe0ac86, hat: 0x111111, hatScale: 0 });
+      this.flyer.geometry.attributes.iAnim.setXY(0, 0.5, 1);
+      this.stands.add(this.flyer);
+    }
+    // WIDE カメラから見える向こう側の最前列
+    const cands = this.seats.map((s, i) => i).filter((i) => i % 3 === 0 && Math.abs(Math.atan2(Math.sin(this.seats[i].a + Math.PI / 2), Math.cos(this.seats[i].a + Math.PI / 2))) < 0.35);
+    const i = cands[Math.floor(rng.next() * cands.length)] ?? 0;
+    this.flyerSeat = i;
+    this.flyerY = 0;
+    this.flyerV = 17;
+    this.flyer.visible = true;
+    this.hideSeats([i], true);
+    return this.seats[i];
+  }
+
   // 観客が一斉に跳ぶ / 会場が揺れる（hop: m, shake: 0〜1）
   bump(hop = 0.6, shake = 0) {
     this.hopV = Math.max(this.hopV ?? 0, hop * 4.2);
@@ -336,6 +459,61 @@ export class TrampolineArena {
       this.hopV = 0;
     }
     u.uHop.value = this.hopY;
+    // ウェーブ
+    const w = this.wave;
+    if (w.on) {
+      const step = w.speed * gameDt;
+      w.angle = (w.angle + step) % (Math.PI * 2);
+      w.left -= step;
+      w.amt = Math.min(1, w.amt + gameDt * 2);
+      if (w.left <= 0) w.on = false;
+    } else w.amt = Math.max(0, w.amt - gameDt * 1.5);
+    this.waveU.uWave.value = w.angle;
+    this.waveU.uWaveAmt.value = w.amt;
+    // 一人だけ飛ぶ観客
+    if (this.flyer?.visible) {
+      this.flyerV -= 9.8 * gameDt;
+      this.flyerY += this.flyerV * gameDt;
+      const s = this.seats[this.flyerSeat];
+      if (this.flyerY <= 0 && this.flyerV < 0) {
+        this.flyer.visible = false;
+        this.hideSeats([this.flyerSeat], false);
+      } else {
+        writeYawMatrix(this.flyer.instanceMatrix.array, 0, s.x, s.y + this.flyerY, s.z, s.yaw + this.flyerY * 0.3, s.scale);
+        this.flyer.instanceMatrix.needsUpdate = true;
+      }
+    }
+    if (w.amt > 0 || this.seatsDirty) this.writeSeats();
+    // フラッシュ
+    this.storm = Math.max(0, this.storm - gameDt);
+    const rate = this.storm > 0 ? 0.45 : this.flashRate * (0.5 + excitement);
+    for (let i = 0; i < this.flashAlpha.length; i++) {
+      const f = this.flashData[i];
+      f.t -= gameDt;
+      if (f.t <= 0) {
+        // 光っていた → 消えて待つ / 待っていた → rate の確率で光る
+        f.on = !f.on && Math.random() < rate;
+        f.t = f.on ? 0.09 : 0.2 + Math.random() * 0.4;
+      }
+      this.flashAlpha[i] = f.on ? f.t / 0.09 : 0;
+    }
+    this.flashes.geometry.attributes.alpha.needsUpdate = true;
+    // 照明の演出
+    if (this.show) {
+      this.show.t += gameDt;
+      const k = this.show.t / this.show.dur;
+      const banks = this.lightBanks.children;
+      banks.forEach((b, i) => {
+        const on = k < 0.85 ? Math.abs((k / 0.85) * banks.length - i) < 1.5 : k < 1;
+        b.material.color.setHex(on ? 0xff7ad9 : 0x2a2a3a).multiplyScalar(on ? 3.2 : 1);
+      });
+      this.hemi.color.setHSL((k * 0.8) % 1, 0.6, 0.72);
+      if (k >= 1.12) {
+        this.show = null;
+        banks.forEach((b) => b.material.color.setHex(0xfff6e0).multiplyScalar(3));
+        this.hemi.color.setHex(0xb8c4ff);
+      }
+    }
     // 観客席の揺れ
     this.shake = Math.max(0, this.shake - gameDt * 0.8);
     const s = this.shake;

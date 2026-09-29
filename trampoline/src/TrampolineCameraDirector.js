@@ -16,6 +16,7 @@ import { clamp, damp, lerp, easeInOut } from '../../src/core/math.js';
 //   TELE     … 超望遠で追う（空へ飛んだ時・帰ってくる時）
 //   RESULT   … 着地後の審判と得点
 //   INTRO    … タイトルの時、会場の上を回る
+//   SYNC     … 背景と偶然一致した瞬間（選手と花火・飛行機が重なって見える位置）
 
 const up = new THREE.Vector3(0, 1, 0);
 
@@ -40,6 +41,9 @@ export class TrampolineCameraDirector {
     this.lookPoint = new THREE.Vector3(0, 20, 0);
     this.crowdPoint = new THREE.Vector3(0, 3, -34);
     this.judgePoint = new THREE.Vector3(-6, 1.6, 7.6);
+    this.syncPoint = new THREE.Vector3(0, 22, -24); // 偶然一致した背景（花火・飛行機など）
+    this.dramaFrom = new THREE.Vector3(); // 観客ドラマのカメラ位置
+    this._d = new THREE.Vector3();
     this.smoothLook = new THREE.Vector3(0, 2, 0);
     this.tmp = new THREE.Vector3();
   }
@@ -105,11 +109,24 @@ export class TrampolineCameraDirector {
         o.fov = 30;
         break;
       }
-      case 'CROWD':
-        o.pos.copy(this.crowdPoint).add(this.tmp.set(-this.crowdPoint.x, 0, -this.crowdPoint.z).normalize().multiplyScalar(4.2)).add(this.tmp.set(0, 0.6, 0));
-        o.look.copy(this.crowdPoint).add(this.tmp.set(0, 1.1, 0));
-        o.fov = 30;
+      case 'CROWD': {
+        // 観客ドラマ: 2 人の後ろ・少し上から。2 人の向こう（背景）でトランポリンの選手が跳び続ける
+        o.pos.copy(this.dramaFrom);
+        o.look.copy(this.crowdPoint).lerp(this._d.set(0, 6, 0), 0.05);
+        o.fov = 42;
         break;
+      }
+      case 'SYNC': {
+        // 偶然の一致: 選手と背景（花火・飛行機…）が一直線に重なる位置から
+        const d = this._d.copy(c).sub(this.syncPoint).normalize();
+        o.pos.copy(c).addScaledVector(d, 9.5);
+        o.pos.x += d.z * 1.4;
+        o.pos.z -= d.x * 1.4;
+        o.pos.y = Math.max(0.8, o.pos.y);
+        o.look.copy(c).lerp(this.syncPoint, 0.02);
+        o.fov = 46;
+        break;
+      }
       case 'ROOF':
         o.pos.set(6, 1.8, 13);
         o.look.set(0, 36, 0);
