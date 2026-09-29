@@ -725,6 +725,14 @@ body {
   letter-spacing: 0.08em;
   opacity: 0.8;
 }
+.mode-link {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+}
+.mode-link:hover {
+  border-color: var(--pink);
+}
 .mode-card.selected {
   border-color: var(--cyan);
   box-shadow: 0 0 22px rgba(57, 230, 255, 0.55), inset 0 0 18px rgba(57, 230, 255, 0.2);

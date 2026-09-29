@@ -585,7 +585,10 @@ export class Game {
     else if (a === 'autopilot') this.autopilot = !this.autopilot;
     else if (a === 'restart') this.restart(this.seed);
     else if (a === 'next') this.chaos.next(core.player.d);
-    else if (a === 'clear') this.mods.clear();
+    else if (a === 'clear') {
+      this.mods.clear();
+      this.chaos.cool = 8; // 片付けた直後に次が始まらないよう、少し待つ
+    }
     else this.devHook?.(a);
   }
 

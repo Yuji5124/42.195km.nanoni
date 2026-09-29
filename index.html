@@ -109,10 +109,15 @@
               <small>0〜15km ・ 約 12 分 ・ 256 人</small>
             </button>
             <button class="mode-card" data-mode="1500m">
-              <span class="new">NEW</span>
               <b>1500m、なのに。</b>
               <small>5〜7 分 ・ 12 人 ・ 決勝</small>
             </button>
+            <!-- 800m は別ページ（800m/）。モード切り替えの対象にしない（data-mode なし） -->
+            <a class="mode-card mode-link" href="./800m/" onpointerdown="event.stopPropagation()">
+              <span class="new">NEW</span>
+              <b>800m、なのに。</b>
+              <small>2〜4 分 ・ 2 周 ・ 何回もゲームが変わる</small>
+            </a>
           </div>
           <div class="start-btn">← → モード選択　SPACE / TAP でスタート</div>
           <div class="controls">
