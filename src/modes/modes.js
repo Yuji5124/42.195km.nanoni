@@ -1,5 +1,6 @@
 import marathonData from '../data/vertical-slice.json';
 import m1500Data from '../data/mode-1500m.json';
+import { Sections1500 } from './m1500/Sections1500.js';
 
 // レースモードの定義。タイトル画面で選ぶ。
 // 共通のシステム（道路・観客・カメラ・CHEER・音）はそのまま使い、距離のスケール・人数・演出データだけを差し替える。
@@ -36,6 +37,9 @@ export const RACE_MODES = {
     ai: { count: 11, layout: 'waterfall', rescoreAfter: 6, pacing: 'middle' },
     countdown: { 3: '位置について', 2: 'よーい', 1: '', go: 'START' },
     goalText: 'FINISH',
+    tvTitle: '1500m 決勝 ─ FINAL<br /><small>TOKYO 生中継</small>',
+    photoFinish: true,
+    createSections: (game) => new Sections1500(game),
     lines: {
       start: 'スタートしました！ 1500m 決勝、12 人が一斉に飛び出します！',
       finish: (pos) =>

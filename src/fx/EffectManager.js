@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import { DigitalShader, FX_PRESETS } from './DigitalShader.js';
 import { Particles } from './Particles.js';
 import { Trail } from './Trail.js';
@@ -41,6 +42,10 @@ export class EffectManager {
     this.composer.addPass(this.renderPass);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.55, 0.5, 0.9);
     this.composer.addPass(this.bloom);
+    // 軽いモーションブラー（レースゲーム区間だけ有効）
+    this.afterimage = new AfterimagePass(0);
+    this.afterimage.enabled = false;
+    this.composer.addPass(this.afterimage);
     this.digital = new ShaderPass(DigitalShader);
     this.composer.addPass(this.digital);
     this.composer.addPass(new OutputPass());
@@ -159,6 +164,12 @@ export class EffectManager {
     u.uMono.value = this.current.mono;
     u.uTint.value = this.current.tint;
     u.uFisheye.value = this.current.fisheye;
+    const blur = this.quality >= 1 ? this.current.blur : 0;
+    if (blur > 0.02) {
+      // 有効にした最初のフレームは古い残像を混ぜない
+      this.afterimage.uniforms.damp.value = this.afterimage.enabled ? blur : 0;
+      this.afterimage.enabled = true;
+    } else this.afterimage.enabled = false;
     const speedTarget = p.dashing || p.boostTimer > 0 ? 1 : 0;
     this.speedFx = damp(this.speedFx ?? 0, speedTarget, 5, dt);
     u.uSpeed.value = Math.max(this.speedFx, this.current.speed) * (this.current.pixel > 1.5 ? 0 : 1);

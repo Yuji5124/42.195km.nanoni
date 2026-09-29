@@ -32,6 +32,16 @@ const ACTIONS = {
   giantDog: { base: 60, label: 'デカ柴!!' },
   droneDown: { base: 18, label: 'DRONE DOWN' },
   carPass: { base: 25, label: 'CAR OVERTAKE' },
+  // 1500m
+  dodge: { base: 50, label: 'NEAR MISS ─ CHEER BONUS' },
+  mirrorPass: { base: 120, label: 'THROUGH THE MIRROR' },
+  wallRun: { base: 30, label: 'WALL RUN' },
+  lastLap: { base: 80, label: 'LAST LAP' },
+  comeback: { base: 220, label: 'LATE COMEBACK!' },
+  closeRace: { base: 40, label: 'CLOSE RACE' },
+  highSpeed: { base: 20, label: 'HIGH SPEED' },
+  photoFinish: { base: 300, label: 'PHOTO FINISH!' },
+  dodgeHit: { base: -40, label: 'ゴーン…' },
 };
 
 export class CheerSystem {

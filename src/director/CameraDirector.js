@@ -22,7 +22,17 @@ function pose() {
   };
 }
 
-const TV_SHOTS = [
+// 1500m 決勝の中継: CAM 01 / CAM 02 / TRACKING / HELICOPTER / GOAL CAM
+export const TV_SHOTS_1500 = [
+  { name: 'ROADSIDE', label: 'CAM 01', dur: 3.6 },
+  { name: 'SIDE_TRACK', label: 'TRACKING', dur: 4.2 },
+  { name: 'HELI', label: 'HELICOPTER', dur: 4.2 },
+  { name: 'FRONT_TELE', label: 'CAM 02', dur: 3.4 },
+  { name: 'GOAL_CAM', label: 'GOAL CAM', dur: 3.2 },
+  { name: 'BIKE', label: 'CAM 03 ─ BIKE', dur: 3.2 },
+];
+
+export const TV_SHOTS = [
   { name: 'HELI', label: 'ヘリ中継', dur: 4.5 },
   { name: 'SIDE_TRACK', label: '沿道追走カメラ', dur: 4.0 },
   { name: 'FRONT_TELE', label: '正面望遠', dur: 3.0 },
@@ -38,6 +48,8 @@ export class CameraDirector {
     this.bus = bus;
     this.path = path;
     this.poses = { a: pose(), b: pose(), out: pose() };
+    this.tvShots = TV_SHOTS;
+    this.startStyle = 'grid';
     this.reset();
   }
 
@@ -74,6 +86,9 @@ export class CameraDirector {
     if (mode === MODES.TV_BROADCAST) {
       this.tvIndex = 0;
       this.tvTime = 0;
+      const first = this.tvShots[0];
+      this.roadside = null; // 次のポーズ計算で、その時のプレイヤー位置から置く
+      this.bus.emit('cameraCut', { shot: first.name, label: first.label });
     }
     if (mode === MODES.CCTV) this.cctv = null;
     if (mode !== MODES.TITLE && mode !== MODES.START) this.changes++;
@@ -101,6 +116,15 @@ export class CameraDirector {
         break;
       }
       case MODES.START: {
+        if (this.startStyle === 'line') {
+          // 1500m: 横一列のスタートラインを正面から舐めるように
+          const k = clamp(t / 4.2, 0, 1);
+          const e = easeInOut(k);
+          W(p.s + 9 - e * 2, lerp(-9, 6, e), 2.4 + e * 0.6, out.pos);
+          W(p.s, lerp(-3, 1.5, e), 1.1, out.look);
+          out.fov = 46;
+          break;
+        }
         const k = clamp(t / 4, 0, 1);
         W(p.s - 22 + k * 10, 7 - k * 4, 15 - k * 8, out.pos);
         W(p.s + 8, 0, 1, out.look);
@@ -156,6 +180,15 @@ export class CameraDirector {
         out.fogFar = 360;
         break;
       }
+      case MODES.PHOTO: {
+        // 写真判定: フィニッシュラインの真横・低い位置から望遠で（ランナーは左 → 右へ横切る）
+        W(this.goalS, 9.0, 2.9, out.pos);
+        W(this.goalS, -4, 0.9, out.look);
+        out.fov = 36;
+        out.fogNear = 120;
+        out.fogFar = 600;
+        break;
+      }
       case MODES.GOAL: {
         // ゴール正面から迎えるカメラ。ゴール後はプレイヤーの前を後退しながら映し続ける
         W(Math.max(this.goalS + 11, p.s + 7.5), 2.8 + Math.sin(t * 0.6) * 1.5, 1.8, out.pos);
@@ -174,7 +207,7 @@ export class CameraDirector {
   tvPose(out, ctx) {
     const p = ctx.player;
     const W = (s, x, y, v) => this.path.toWorld(s, x, y, v);
-    const shot = TV_SHOTS[this.tvIndex % TV_SHOTS.length];
+    const shot = this.tvShots[this.tvIndex % this.tvShots.length];
     const t = this.tvTime;
     this.shotLabel = shot.label;
     switch (shot.name) {
@@ -201,6 +234,7 @@ export class CameraDirector {
         out.fogFar = 520;
         break;
       case 'ROADSIDE':
+        this.roadside ??= { s: p.s + 26, x: 6.9, y: 2.4 };
         W(this.roadside.s, this.roadside.x, this.roadside.y, out.pos);
         W(p.s, p.x, 1.2, out.look);
         out.fov = 44;
@@ -210,6 +244,14 @@ export class CameraDirector {
         W(p.s, p.x, 1.3, out.look);
         out.fov = 52;
         break;
+      case 'GOAL_CAM':
+        // ゴール地点のカメラ…からの超望遠（まだ何百 m も先）
+        W(p.s + 160, 0.5, 3.2, out.pos);
+        W(p.s, p.x, 1.2, out.look);
+        out.fov = 4.2 - t * 0.35;
+        out.fogNear = 400;
+        out.fogFar = 900;
+        break;
       default:
         break;
     }
@@ -218,6 +260,7 @@ export class CameraDirector {
   update(dt, ctx) {
     this.modeTime += dt;
     const p = ctx.player;
+    this.lastPlayerS = p.s;
     this.followX = damp(this.followX, p.x, 6, dt);
     this.followY = damp(this.followY, p.y, 5, dt);
     // カーブで少しだけ内側に傾ける（スピード感）
@@ -238,14 +281,15 @@ export class CameraDirector {
     // TV ショットの自動カット
     if (this.mode === MODES.TV_BROADCAST) {
       this.tvTime += dt;
-      const shot = TV_SHOTS[this.tvIndex % TV_SHOTS.length];
+      const shots = this.tvShots;
+      const shot = shots[this.tvIndex % shots.length];
       if (this.tvTime > shot.dur) {
         this.tvIndex++;
         this.tvTime = 0;
         this.changes++;
-        const next = TV_SHOTS[this.tvIndex % TV_SHOTS.length];
+        const next = shots[this.tvIndex % shots.length];
         // 柵の内側・路肩ぎりぎりの定点カメラ
-        if (next.name === 'ROADSIDE') this.roadside = { s: p.s + 26, x: 6.9, y: 2.4 };
+        if (next.name === 'ROADSIDE') this.roadside = null;
         this.bus.emit('cameraCut', { shot: next.name, label: next.label });
       }
     }

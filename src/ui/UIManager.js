@@ -73,6 +73,10 @@ export class UIManager {
   setRaceMode(mode, total) {
     this.mode = mode;
     this.cache = {};
+    this.setTVTitle(mode.tvTitle ?? 'TOKYO DIGITAL MARATHON<br /><small>生中継</small>');
+    this.setTicker(false);
+    this.setMirrorHUD(false);
+    this.setCheerFocus(false);
     document.body.dataset.race = mode.id;
     $('titleA').textContent = mode.title[0];
     $('titleB').textContent = mode.title[1];
@@ -189,6 +193,53 @@ export class UIManager {
     const mm = String(Math.floor((t % 3600) / 60)).padStart(2, '0');
     const ss = String(t % 60).padStart(2, '0');
     this.set('cctvStamp', `${hh}${mm}${ss}`, () => ($('cctvStamp').textContent = `2027.03.07 SUN ${hh}:${mm}:${ss}`));
+  }
+
+  // ---- 1500m の演出用
+  bigDist(main, sub, ms = 2600) {
+    const el = $('bigDist');
+    el.querySelector('b').textContent = main;
+    el.querySelector('small').textContent = sub;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    clearTimeout(this.timers.big);
+    this.timers.big = setTimeout(() => el.classList.remove('show'), ms);
+  }
+
+  setTicker(on) {
+    $('ticker').classList.toggle('hidden', !on);
+    this.cache.tkScroll = this.cache.tkLap = this.cache.tkLapTime = undefined;
+  }
+
+  // lap: 'LAP 3 / 4' / scroll: 流れる文字 / lastLap: 鐘が鳴った後
+  ticker({ lap, lapTime, scroll, lastLap }) {
+    this.set('tkLap', lap, (v) => ($('tkLap').textContent = v));
+    this.set('tkLapTime', lapTime, (v) => ($('tkLapTime').textContent = v));
+    this.set('tkScroll', scroll, (v) => ($('tkScroll').textContent = v));
+    this.set('tkLast', lastLap, (v) => $('ticker').classList.toggle('last-lap', v));
+  }
+
+  // 写真判定の静止画に重ねる線とタイム
+  photoFinish(time, position) {
+    $('pfTime').textContent = time;
+    $('pfPos').textContent = `${position} / 12 ─ ${position === 1 ? 'WINNER' : 'FINISH'}`;
+    const el = $('photoFinish');
+    el.classList.remove('hidden');
+    clearTimeout(this.timers.pf);
+    this.timers.pf = setTimeout(() => el.classList.add('hidden'), 2200);
+  }
+
+  setTVTitle(html) {
+    $('tvTitle').innerHTML = html;
+  }
+
+  setMirrorHUD(on) {
+    this.el.hud.classList.toggle('mirrored', on);
+  }
+
+  setCheerFocus(on) {
+    this.el.hud.classList.toggle('cheer-focus', on);
   }
 
   camTag(text, ms = 1800) {

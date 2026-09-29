@@ -79,7 +79,36 @@ function buildGeometries() {
     box(0.4, 0.18, 0.05, -0.6, 0.85, 2.16, 0xff2020),
     box(0.4, 0.18, 0.05, 0.6, 0.85, 2.16, 0xff2020),
   ]);
-  return { cone, barrier, banana, hurdle, crate, onigiri, shoe, token, car };
+  // 1500m: 倒れた自販機 / 工事中の立て看板 / 段差 / 自転車（人が乗って横切る）
+  const vending = mergeGeometries([
+    box(0.95, 0.9, 1.8, 0, 0.45, 0, 0xd8202c),
+    box(0.97, 0.5, 1.2, 0, 0.62, -0.05, 0xf4f4f4),
+    box(0.99, 0.12, 0.5, 0, 0.3, 0.6, 0x222222),
+    box(0.99, 0.08, 1.3, 0, 0.93, 0, 0x8a0f18),
+  ]);
+  const sign = mergeGeometries([
+    box(1.3, 1.05, 0.08, 0, 0.62, -0.28, 0xffd21f),
+    box(1.3, 1.05, 0.08, 0, 0.62, 0.28, 0xffd21f),
+    box(1.32, 0.18, 0.09, 0, 0.85, -0.28, 0x151515),
+    box(1.32, 0.18, 0.09, 0, 0.45, -0.28, 0x151515),
+    box(0.9, 0.3, 0.1, 0, 1.05, -0.3, 0xffffff),
+  ]).rotateX(0);
+  const step = mergeGeometries([
+    box(2.2, 0.5, 2.8, 0, 0.25, 0, 0x8c8f99),
+    box(2.25, 0.06, 2.85, 0, 0.5, 0, 0xffd21f),
+  ]);
+  const wheel = (z) => colored(new THREE.TorusGeometry(0.33, 0.05, 5, 12).rotateY(Math.PI / 2).translate(0, 0.36, z), 0x151515);
+  const bike = mergeGeometries([
+    wheel(-0.55),
+    wheel(0.55),
+    box(0.06, 0.06, 1.1, 0, 0.62, 0, 0xc0c4cc),
+    box(0.06, 0.5, 0.06, 0, 0.62, 0.2, 0xc0c4cc),
+    box(0.42, 0.62, 0.3, 0, 1.25, 0.1, 0xffffff),
+    box(0.26, 0.26, 0.26, 0, 1.72, 0.05, 0xf1c9a5),
+    box(0.3, 0.1, 0.3, 0, 1.87, 0.05, 0x222222),
+    box(0.14, 0.5, 0.14, 0, 0.8, -0.05, 0x2a3a5a),
+  ]);
+  return { cone, barrier, banana, hurdle, crate, onigiri, shoe, token, car, vending, sign, step, bike };
 }
 
 // kind: hazard（当たると影響）/ pickup（取ると得）
@@ -96,9 +125,16 @@ const TYPES = {
   cat: { kind: 'hazard', h: 0.8, halfW: 0.6, jumpable: true, effect: 'cat', cap: 90, animal: true },
   // レース区間の車: コースを同じ向きにゆっくり走る。飛び越えられない
   car: { kind: 'hazard', h: 2.0, halfW: 1.0, halfLen: 2.2, jumpable: false, effect: 'carCrash', cap: 24, car: true },
+  // 1500m の東京区間
+  vending: { kind: 'hazard', h: 0.95, halfW: 0.5, halfLen: 0.9, jumpable: true, effect: 'stagger', cap: 12 },
+  sign: { kind: 'hazard', h: 1.15, halfW: 0.66, halfLen: 0.35, jumpable: true, effect: 'stagger', cap: 16 },
+  step: { kind: 'hazard', h: 0.5, halfW: 1.1, halfLen: 1.4, jumpable: true, effect: 'stagger', cap: 12 },
+  bike: { kind: 'hazard', h: 1.1, halfW: 0.7, halfLen: 0.6, jumpable: true, effect: 'stagger', cap: 10, crosser: true },
 };
 
 const CAR_PAINT = [0xffc21a, 0xeeeeee, 0xd02030, 0x2050c0, 0x30a060, 0x222228].map((c) => new THREE.Color(c));
+// 東京のタクシー（黄・緑・黒）
+const TAXI = [0, 4, 5];
 
 const CAT_SCALE = 2.0;
 
@@ -242,6 +278,74 @@ export class CourseManager {
     return rng.range(20, 32);
   }
 
+  // 1500m の東京: タクシー（同じ向きにゆっくり）・横切る自転車・工事中
+  spawnTokyo(s, density, cats = 0) {
+    const rng = this.rng;
+    if (cats > 0 && rng.chance(cats)) {
+      this.spawnCat(s);
+      return rng.range(14, 22) / Math.max(0.3, density);
+    }
+    const r = rng.next();
+    if (r < 0.26) {
+      this.add('car', s, (rng.chance(0.5) ? -1 : 1) * rng.range(4.2, 5.0), { vs: rng.range(10, 12), paint: rng.pick(TAXI) });
+    } else if (r < 0.46) {
+      const from = rng.chance(0.5) ? -1 : 1;
+      this.add('bike', s, from * rng.range(8.6, 10.5), { vx: -from * rng.range(4.5, 6), trigger: rng.range(40, 60), started: false });
+    } else if (r < 0.7) {
+      const x = rng.range(-LIMIT + 1.5, LIMIT - 1.5);
+      this.add('sign', s, x);
+      this.add('cone', s + 1.2, x - 1.4);
+      this.add('cone', s + 1.2, x + 1.4);
+    } else if (r < 0.82) {
+      this.add('onigiri', s, rng.range(-LIMIT, LIMIT));
+    } else {
+      const gap = rng.int(0, 4);
+      for (let k = 0; k < 5; k++) if (k !== gap) this.add('cone', s, -LIMIT + 0.3 + k * ((LIMIT * 2 - 0.6) / 4));
+    }
+    return rng.range(26, 40) / Math.max(0.25, density);
+  }
+
+  // レースゲーム区間: レーシングラインに ♪、コーナーの内側にパイロン
+  spawnRacing(s) {
+    const rng = this.rng;
+    const k = this.path.kappa(s + 20);
+    const inside = k > 0.002 ? -1 : k < -0.002 ? 1 : 0;
+    if (inside !== 0 && rng.chance(0.6)) {
+      for (let j = 0; j < 3; j++) this.add('cone', s + j * 3, inside * (LIMIT - 0.4));
+      for (let j = 0; j < 4; j++) this.add('token', s + j * 2.6, inside * (LIMIT - 2.2), { y: 1.1 });
+      return rng.range(24, 34);
+    }
+    const x0 = rng.range(-4, 4);
+    for (let j = 0; j < 5; j++) this.add('token', s + j * 2.4, x0 + Math.sin(j * 0.8) * 1.6, { y: 1.1 });
+    return rng.range(26, 38);
+  }
+
+  // 1500m の横スクロール: 倒れた自販機・工事の立て看板・段差
+  spawnSide2DTokyo(s, lane) {
+    const rng = this.rng;
+    const r = rng.next();
+    if (r < 0.3) {
+      this.add('vending', s, lane);
+      for (const [ds, y] of [[-2.2, 2.2], [0, 2.9], [2.2, 2.2]]) this.add('token', s + ds, lane, { y });
+      return 24 + rng.range(0, 8);
+    }
+    if (r < 0.55) {
+      this.add('sign', s, lane);
+      this.add('token', s, lane, { y: 2.8 });
+      return 22 + rng.range(0, 8);
+    }
+    if (r < 0.78) {
+      this.add('step', s, lane);
+      this.add('sign', s + 8, lane);
+      for (let k = 0; k < 3; k++) this.add('token', s + 2 + k * 2, lane, { y: 2.0 + k * 0.3 });
+      return 30 + rng.range(0, 8);
+    }
+    this.add('crate', s, lane);
+    this.add('vending', s + 9, lane);
+    this.add('token', s + 4.5, lane, { y: 2.5 });
+    return 32 + rng.range(0, 8);
+  }
+
   spawnNormal(s, density, cats = 0) {
     const rng = this.rng;
     if (cats > 0 && rng.chance(cats)) {
@@ -292,6 +396,21 @@ export class CourseManager {
         this.nextS += this.spawnTraffic(this.nextS);
         continue;
       }
+      if (pattern === 'side2dTokyo') {
+        const lane = this.events.paramAt('rules', km)?.lane ?? 4;
+        this.nextS += this.spawnSide2DTokyo(this.nextS, lane);
+        continue;
+      }
+      if (pattern === 'tokyo') {
+        const density = this.events.paramAt('obstacles', km);
+        const cats = this.events.paramAt('cats', km) ?? 0;
+        this.nextS += this.spawnTokyo(this.nextS, Math.max(0.15, density), cats);
+        continue;
+      }
+      if (pattern === 'racing') {
+        this.nextS += this.spawnRacing(this.nextS);
+        continue;
+      }
       if (pattern === 'catStampede') {
         this.nextS += this.spawnCatWave(this.nextS);
         continue;
@@ -308,7 +427,7 @@ export class CourseManager {
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       if (it.vs && !it.knock) it.s += it.vs * dt;
-      if (it.type === 'cat' && !it.knock) {
+      if ((it.type === 'cat' || it.def.crosser) && !it.knock) {
         if (!it.started && player.s > it.s - it.trigger) it.started = true;
         if (it.started) it.x += it.vx * dt;
         if (Math.abs(it.x) > 11 && it.started && Math.sign(it.x) === Math.sign(it.vx)) it.gone = true;
@@ -423,6 +542,7 @@ export class CourseManager {
         yaw = it.spin * 0.6;
       }
       if (it.def.car) mesh.setColorAt(i, CAR_PAINT[it.paint]);
+      if (it.def.crosser) yaw = it.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       if (it.def.animal) {
         // 進む向きを向いて、走っている間だけ脚を動かす
         scale = CAT_SCALE;

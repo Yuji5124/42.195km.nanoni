@@ -450,6 +450,188 @@ body {
 .cctv-corner.bl { bottom: 70px; left: 14px; border-bottom-width: 3px; border-left-width: 3px; }
 .cctv-corner.br { bottom: 70px; right: 14px; border-bottom-width: 3px; border-right-width: 3px; }
 
+/* ===== 1500m: ティッカー ===== */
+.ticker {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--font-num);
+}
+.tk-top {
+  position: absolute;
+  top: 140px;
+  left: 112px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+.tk-top span {
+  padding: 3px 10px;
+  background: rgba(8, 12, 36, 0.8);
+  border-left: 3px solid var(--yellow);
+}
+.tk-top .tk-live {
+  color: #fff;
+  background: #d8102c;
+  border: 0;
+}
+.ticker.last-lap #tkLap {
+  color: #111;
+  background: var(--yellow);
+  animation: pulse 0.5s infinite alternate;
+}
+.tk-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 118px;
+  height: 34px;
+  display: flex;
+  align-items: stretch;
+  background: rgba(6, 10, 30, 0.86);
+  border-top: 2px solid var(--yellow);
+  overflow: hidden;
+}
+.tk-label {
+  flex: none;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  background: var(--yellow);
+  color: #111;
+  font-family: var(--font-jp);
+  font-size: 15px;
+}
+.tk-scroll {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.tk-scroll span {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translate(100vw, -50%);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  animation: tickerRun 16s linear infinite;
+}
+@keyframes tickerRun {
+  from { transform: translate(100vw, -50%); }
+  to { transform: translate(-100%, -50%); }
+}
+
+/* ===== 1500m: 写真判定 ===== */
+.photo-finish {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.pf-line {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1px;
+  background: linear-gradient(180deg, rgba(255, 40, 60, 0.95), rgba(255, 255, 255, 0.9));
+  box-shadow: 0 0 10px rgba(255, 40, 60, 0.8);
+}
+.pf-label {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  transform: translateX(8px);
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.75);
+  border-left: 4px solid #ff283c;
+  font-family: var(--font-num);
+  line-height: 1.15;
+}
+.pf-label span {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  color: #ff8a96;
+}
+.pf-label b {
+  display: block;
+  font-size: 34px;
+  font-style: italic;
+}
+.pf-label small {
+  font-size: 14px;
+  letter-spacing: 0.12em;
+}
+
+/* ===== 1500m: 750m ===== */
+.big-dist {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+}
+.big-dist b {
+  display: block;
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(110px, 26vw, 300px);
+  line-height: 0.9;
+  color: #fff;
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.5), 8px 8px 0 #000;
+}
+.big-dist small {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-jp);
+  font-size: clamp(22px, 4vw, 40px);
+}
+.big-dist.show {
+  animation: bigDistIn 2.6s ease-out forwards;
+}
+@keyframes bigDistIn {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+
+/* ===== 1500m: 鏡の世界では HUD も左右反転（数字は読めるように戻す） ===== */
+#hud.mirrored {
+  transform: scaleX(-1);
+}
+#hud.mirrored .value,
+#hud.mirrored .hud-time,
+#hud.mirrored .speed,
+#hud.mirrored .area,
+#hud.mirrored .combo,
+#hud.mirrored .cam-tag {
+  transform: scaleX(-1);
+}
+#hud.mirrored .hud-cheer .value,
+#hud.mirrored .hud-cheer .combo {
+  transform: scaleX(-1);
+}
+
+/* ===== 1500m: 観客が多すぎる区間は CHEER を主役に ===== */
+#hud.cheer-focus .hud-cheer {
+  transform: translateX(-50%) scale(1.45);
+  transform-origin: 50% 0;
+  transition: transform 0.4s;
+}
+#hud.cheer-focus .hud-cheer .value {
+  color: var(--yellow);
+  text-shadow: 0 0 24px rgba(255, 210, 63, 0.9), 3px 3px 0 var(--pink);
+}
+
 /* ===== カウントダウン ===== */
 .countdown {
   position: absolute;
@@ -834,6 +1016,10 @@ body[data-mode='TV_BROADCAST'] .hud-bottom {
   .speed { font-size: 22px; min-width: 90px; }
   .area { top: 62px; left: 14px; font-size: 12px; }
   .cam-tag { top: 150px; font-size: 11px; }
+  .tk-top { top: 150px; left: 96px; font-size: 12px; }
+  .tk-bar { bottom: 150px; height: 28px; }
+  .tk-label { font-size: 12px; padding: 0 8px; }
+  .tk-scroll span { font-size: 13px; }
   .tv .live { top: 150px; left: 14px; font-size: 12px; }
   .tv .tv-title { display: none; }
   .tv .lower-third { bottom: 180px; font-size: 13px; }

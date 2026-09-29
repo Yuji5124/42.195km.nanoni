@@ -12,10 +12,10 @@ import { clamp, lerp, smoothstep } from '../core/math.js';
 // pace: [集団, 分裂, 入れ替わり, スパート]（単位/秒。プレイヤーの巡航 = 16, ペースアップ = 18.5, ダッシュ = 24）
 // 平均的なプレイヤー（ペースアップ中心 ≒ 17.2 + 声援ボーナス）が集団の中にいる強さ
 export const ARCHETYPES = {
-  start: { label: '逃げ', pace: [17.7, 18.1, 16.5, 18.9] },
-  middle: { label: '先行', pace: [17.4, 17.4, 18.1, 20.1] },
-  closer: { label: '追込', pace: [17.2, 16.7, 17.8, 20.9] },
-  steady: { label: 'イーブン', pace: [17.4, 17.4, 17.4, 19.5] },
+  start: { label: '逃げ', pace: [17.3, 17.6, 16.2, 18.6] },
+  middle: { label: '先行', pace: [17.1, 17.0, 17.6, 19.8] },
+  closer: { label: '追込', pace: [16.9, 16.4, 17.4, 20.6] },
+  steady: { label: 'イーブン', pace: [17.1, 17.0, 17.0, 19.2] },
 };
 
 // index 0 はライバルの忍者（AIRunnerManager がプレイヤーの近くをキープさせる）
@@ -107,8 +107,8 @@ export class MiddleDistancePacer {
 
     // プレイヤーと離れすぎない（画面に誰もいない時間を作らない）
     const gap = s - ctx.player.s;
-    if (gap > 60) v -= Math.min(1.2, (gap - 60) * 0.025);
-    else if (gap < -60) v += Math.min(1.6, (-gap - 60) * 0.03);
+    if (gap > 35) v -= Math.min(1.8, (gap - 35) * 0.04);
+    else if (gap < -35) v += Math.min(2.0, (-gap - 35) * 0.045);
     // ライバル（忍者）は脚質どおりに走りつつ、プレイヤーの近くに寄ってくる
     if (FIELD[i]?.rival) v += clamp((2.5 - gap) * 0.12, -1.2, 1.2);
 

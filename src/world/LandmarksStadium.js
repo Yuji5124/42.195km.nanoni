@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 import { CONFIG } from '../config.js';
 import { makeBannerTexture, makeStandCrowdTexture, makeTrackLineTexture, makeCanvas, toTexture, FONT_JP } from './textures.js';
 
@@ -169,13 +170,13 @@ export const stadiumBuilders = {
     if (kind === 'finish') {
       // 写真判定カメラの塔（右）
       const tower = new THREE.Mesh(new THREE.BoxGeometry(0.6, 6, 0.6), darkMetal);
-      tower.position.set(HALF + 2.2, 3, 0);
+      tower.position.set(HALF + 3.8, 3, 0);
       g.add(tower);
       const camBox = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.7, 0.9), new THREE.MeshLambertMaterial({ color: 0xdadde6 }));
-      camBox.position.set(HALF + 2.2, 6.3, 0);
+      camBox.position.set(HALF + 3.8, 6.3, 0);
       g.add(camBox);
       const redLamp = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), glow(0xff2030, 3));
-      redLamp.position.set(HALF + 1.7, 6.5, 0);
+      redLamp.position.set(HALF + 3.3, 6.5, 0);
       g.add(redLamp);
       // 時計（左）: レース時計をそのまま表示
       const [c, cg] = makeCanvas(512, 160);
@@ -239,7 +240,7 @@ export const stadiumBuilders = {
   },
 
   // 巨大な鏡のゲート（本体は区間の演出側で使う。ここでは枠だけ）
-  mirrorGate(lm) {
+  mirrorGate(lm, ctx) {
     const g = new THREE.Group();
     const w = HALF * 2 + 7;
     const h = 16;
@@ -264,7 +265,31 @@ export const stadiumBuilders = {
     sign.material.color.setScalar(1.4);
     sign.position.set(0, h + 0.6, 0.65);
     g.add(sign);
-    return { group: g, mirrorSize: { w, h }, exit: !!lm.exit };
+    // 本物の鏡（近づいた時だけ映す。遠くでは銀色の板）
+    const mirror = new Reflector(new THREE.PlaneGeometry(w, h), {
+      textureWidth: 512,
+      textureHeight: Math.round((512 * h) / w),
+      color: 0xb4c2da,
+      clipBias: 0.003,
+    });
+    mirror.position.y = h / 2;
+    mirror.visible = false;
+    g.add(mirror);
+    const silverMat = new THREE.MeshBasicMaterial({ color: 0x6c7a98, transparent: true, opacity: 0.9 });
+    silverMat.color.multiplyScalar(1.3);
+    const silver = new THREE.Mesh(new THREE.PlaneGeometry(w, h), silverMat);
+    silver.position.y = h / 2;
+    g.add(silver);
+    return {
+      group: g,
+      exit: !!lm.exit,
+      // rel = プレイヤーの s − 鏡の s（手前がマイナス）。通り抜けたら消える
+      update(dt, rel = -999) {
+        const near = rel > -120 && rel < 0.3 && (ctx.quality?.() ?? 2) >= 1;
+        mirror.visible = near;
+        silver.visible = !near && rel < 0.3;
+      },
+    };
   },
 
   // 歩道橋。上にも観客がぎっしり（沿道と同じ人型・同じシェーダー）

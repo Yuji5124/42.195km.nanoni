@@ -98,4 +98,10 @@ export const FX_PRESETS = {
   // 雲の上: 明るく、ブルーム強め
   sky: { aberr: 0.001, scan: 0, pixel: 0, noise: 0.01, vignette: 0.25, posterize: 0, bloom: 0.9, mirror: 0, speed: 0, mono: 0, tint: 0, fisheye: 0 },
   goal: { aberr: 0.001, scan: 0, pixel: 0, noise: 0.01, vignette: 0.35, posterize: 0, bloom: 0.8, mirror: 0, speed: 0, mono: 0, tint: 0, fisheye: 0 },
+  // 1500m: レースゲーム（スピード線 + 軽いモーションブラー）
+  racer: { aberr: 0.004, scan: 0, pixel: 0, noise: 0.03, vignette: 0.6, posterize: 0, bloom: 0.7, mirror: 0, speed: 0.6, mono: 0, tint: 0, fisheye: 0, blur: 0.32 },
+  // 1500m: 写真判定の静止画（白黒・粒子）
+  photo: { aberr: 0, scan: 0.08, pixel: 0, noise: 0.09, vignette: 0.7, posterize: 0, bloom: 0.3, mirror: 0, speed: 0, mono: 1, tint: 0, fisheye: 0 },
 };
+// blur が無いプリセットは 0（モーションブラーなし）
+for (const p of Object.values(FX_PRESETS)) p.blur ??= 0;

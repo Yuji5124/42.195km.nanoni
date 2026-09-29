@@ -456,6 +456,8 @@ export function buildLandmark(lm, ctx = {}) {
 
 export function disposeObject(obj) {
   obj.traverse((o) => {
+    // 鏡（Reflector）は専用のレンダーターゲットを持つ
+    if (typeof o.getRenderTarget === 'function') o.getRenderTarget().dispose();
     if (o.geometry) o.geometry.dispose();
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];

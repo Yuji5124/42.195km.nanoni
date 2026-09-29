@@ -46,12 +46,13 @@ varying vec2 vParams;
 uniform float uTime;
 uniform float uWindowBoost;
 uniform float uWire;
+uniform float uCrowdWin;
 float bhash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 `;
 
 function createBuildingMaterial() {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const uniforms = { uTime: { value: 0 }, uWindowBoost: { value: 1 }, uWire: { value: 0 } };
+  const uniforms = { uTime: { value: 0 }, uWindowBoost: { value: 1 }, uWire: { value: 0 }, uCrowdWin: { value: 0 } };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
@@ -80,10 +81,24 @@ function createBuildingMaterial() {
           vec2 f = fract(vec2(u, v) / cellSize);
           float inWin = step(0.16, f.x) * step(f.x, 0.84) * step(0.22, f.y) * step(f.y, 0.8);
           float seed = vParams.x * 17.31 + (sideX ? vBNorm.x : vBNorm.z * 3.0);
-          float lit = step(0.64, bhash(id + seed));
+          float lit = step(0.64 - uCrowdWin * 0.34, bhash(id + seed));
           vec3 wcol = vWin * (0.3 + 0.55 * bhash(id * 1.37 + seed));
-          totalEmissiveRadiance += wcol * inWin * lit * 0.75 * uWindowBoost;
+          // 1500m「観客、多すぎ」: 明かりのついた窓ごとに、手を振る人影
+          float sil = 0.0;
+          if (uCrowdWin > 0.01) {
+            float pid = bhash(id * 3.1 + seed + 0.5);
+            if (pid < uCrowdWin * 0.9) {
+              float head = step(length((f - vec2(0.5, 0.63)) * vec2(1.0, 1.3)), 0.1);
+              float body = step(abs(f.x - 0.5), 0.16) * step(0.22, f.y) * step(f.y, 0.53);
+              float wave = sin(uTime * 7.0 + pid * 40.0);
+              vec2 arm = f - vec2(0.5 + (pid < uCrowdWin * 0.45 ? 0.19 : -0.19), 0.5);
+              float armM = step(abs(arm.x - arm.y * 0.5 * wave), 0.045) * step(0.0, arm.y) * step(arm.y, 0.26);
+              sil = max(max(head, body), armM) * inWin * lit;
+            }
+          }
+          totalEmissiveRadiance += wcol * inWin * lit * 0.75 * uWindowBoost * (1.0 + uCrowdWin * 0.5) * (1.0 - sil * 0.92);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.04, 0.07), inWin * (1.0 - lit));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.01), sil);
           // 1 階の店舗の明かり
           float shop = step(v, 3.2) * step(0.6, v) * step(0.08, f.x) * step(f.x, 0.92);
           totalEmissiveRadiance += vWin * shop * 0.28;
@@ -100,7 +115,7 @@ function createBuildingMaterial() {
         totalEmissiveRadiance += vec3(0.25, 0.95, 1.1) * uWire * (0.8 + 0.2 * sin(uTime * 20.0 + vBPos.y));`
       );
   };
-  mat.customProgramCacheKey = () => 'tokyo-building-v2';
+  mat.customProgramCacheKey = () => 'tokyo-building-v3';
   return mat;
 }
 
@@ -427,6 +442,11 @@ export class TokyoChunkManager {
     this.scene.add(this.skyline);
   }
 
+  // 1500m: ビルの窓に観客（0〜1）。区間の出入りでなめらかに
+  setCrowdWindows(v) {
+    this.crowdWinTarget = v;
+  }
+
   setWireframe(on) {
     this.buildingMaterial.wireframe = on;
     this.buildingMaterial.userData.uniforms.uWire.value = on ? 1 : 0;
@@ -450,7 +470,9 @@ export class TokyoChunkManager {
 
   update(playerS, dt, sideBlend = 0) {
     this.time += dt;
-    this.buildingMaterial.userData.uniforms.uTime.value = this.time;
+    const bu = this.buildingMaterial.userData.uniforms;
+    bu.uTime.value = this.time;
+    bu.uCrowdWin.value += ((this.crowdWinTarget ?? 0) - bu.uCrowdWin.value) * Math.min(1, dt * 2);
 
     const f = this.path.sample(playerS);
     this.ground.position.set(f.x, -1.0, f.z);
@@ -680,7 +702,7 @@ export class TokyoChunkManager {
         lm.built = null;
       }
       if (lm.built) {
-        lm.built.update?.(dt);
+        lm.built.update?.(dt, playerS - lm.s);
         if (lm.built.followsPlayer) {
           this.placeGroup(lm.built.group, playerS);
           lm.built.setOpacity?.(smoothstep(0.35, 0.95, sideBlend));

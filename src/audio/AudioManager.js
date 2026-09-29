@@ -36,6 +36,35 @@ const STYLES = {
     lead: [24, null, 24, 27, null, 29, null, 31, 29, null, 27, null, 24, null, 22, null],
     kick: [0, 4, 8, 12], snare: [4, 12], hat: [0, 2, 4, 6, 8, 10, 12, 14, 1, 5, 9, 13], hatVol: 0.022,
   },
+  // ---- 1500m
+  // スタジアム: 入場曲っぽいファンファーレ
+  stadium: {
+    bpm: 118, wave: 'triangle', cutoff: 1500, bassVol: 0.13, leadWave: 'square', leadVol: 0.04,
+    bass: [0, null, 0, null, 5, null, 5, null, 7, null, 7, null, 5, null, 4, null],
+    lead: [24, null, 28, 31, null, 31, 33, 31, 28, null, 26, 28, null, 24, null, null],
+    kick: [0, 8], snare: [4, 12], hat: [2, 6, 10, 14], hatVol: 0.025,
+  },
+  // 見下ろし回避: 弾幕シューティング風のアルペジオ
+  dodge: {
+    bpm: 172, wave: 'square', cutoff: 2200, bassVol: 0.1, leadWave: 'square', leadVol: 0.035,
+    bass: [0, 12, 0, 12, 3, 15, 3, 15, 5, 17, 5, 17, 7, 19, 7, 19],
+    lead: [24, 28, 31, 36, 31, 28, 24, 28, 27, 31, 34, 39, 34, 31, 27, 31],
+    kick: [0, 4, 8, 12], snare: [4, 12], hat: [1, 3, 5, 7, 9, 11, 13, 15], hatVol: 0.025, chipDrums: true,
+  },
+  // 重力シフト: 低い鼓動が少しずつ明るくなる（緊張の上昇）
+  tension: {
+    bpm: 100, wave: 'sawtooth', cutoff: 380, bassVol: 0.14, leadWave: 'sine', leadVol: 0.05, rise: true,
+    bass: [0, null, 0, null, 0, null, 0, null, 1, null, 1, null, 1, null, 1, null],
+    lead: [null, null, null, null, 36, null, null, null, null, null, null, null, 37, null, null, null],
+    kick: [0, 4, 8, 12], snare: [], hat: [], hatVol: 0,
+  },
+  // 鏡の世界: いつもの曲を逆から
+  mirror: {
+    bpm: 140, wave: 'sawtooth', cutoff: 800, bassVol: 0.12, leadWave: 'triangle', leadVol: 0.05,
+    bass: [null, 7, null, 3, 12, 5, 5, null, null, 3, null, 0, 12, 0, null, 0],
+    lead: [null, null, null, 22, null, 19, null, null, null, 22, null, 24, null, null, null, null],
+    kick: [0, 4, 8, 12], snare: [4, 12], hat: [3, 7, 11, 15], hatVol: 0.03,
+  },
   final: {
     bpm: 164, wave: 'sawtooth', cutoff: 1100, bassVol: 0.14, leadWave: 'sawtooth', leadVol: 0.04,
     bass: [0, 0, 12, 0, 3, 3, 15, 3, 5, 5, 17, 5, 7, 7, 19, 7],
@@ -118,6 +147,7 @@ export class AudioManager {
     if (style === this.style) return;
     this.style = style;
     this.step = 0;
+    this.styleStart = this.ctx?.currentTime ?? 0;
     if (this.ctx) this.nextTime = this.ctx.currentTime + 0.05;
   }
 
@@ -174,7 +204,8 @@ export class AudioManager {
 
   // ---- 効果音
   footstep(speed) {
-    this.noiseHit(0.05, { type: 'lowpass', freq: 500 + speed * 20, vol: 0.05 });
+    // ラスト 50m は足音がよく聞こえる
+    this.noiseHit(0.05, { type: 'lowpass', freq: 500 + speed * 20, vol: this.breath ? 0.14 : 0.05 });
   }
   jump() {
     this.tone(300, 0.14, { type: 'triangle', slideTo: 720, vol: 0.09 });
@@ -298,8 +329,10 @@ export class AudioManager {
     const bar16 = step % 16;
     const spb = 60 / S.bpm / 4;
     const bn = S.bass[bar16];
+    // rise: 区間が進むほどフィルターが開いていく
+    const cutoff = S.rise ? S.cutoff * (1 + Math.min(4, (t - (this.styleStart ?? t)) / 7)) : S.cutoff;
     if (bn !== null && bn !== undefined) {
-      this.tone(semi(bn), spb * 1.8, { type: S.wave, vol: S.bassVol, at: t, cutoff: S.cutoff, bus: this.musicBus });
+      this.tone(semi(bn), spb * 1.8, { type: S.wave, vol: S.bassVol, at: t, cutoff, bus: this.musicBus });
     }
     const phrase = Math.floor(step / 16) % 4;
     const ln = S.lead[bar16];
@@ -332,8 +365,25 @@ export class AudioManager {
       }
     }
     const e = ctx.excitement ?? 0;
-    const target = (ctx.playing ? 0.025 + e * 0.22 : 0.02);
-    this.crowdGain.gain.setTargetAtTime(target, now, 0.3);
+    let target = ctx.playing ? 0.025 + e * 0.22 : 0.02;
+    if (now < (this.hushUntil ?? 0)) target = 0.0;
+    this.crowdGain.gain.setTargetAtTime(target, now, now < (this.hushUntil ?? 0) ? 0.05 : 0.3);
+
+    // 1500m ラスト 50m: 息づかいと鼓動
+    if (this.breath) {
+      this.breathT = (this.breathT ?? 0) - dt;
+      if (this.breathT <= 0) {
+        this.breathT = 0.42;
+        this.breathIn = !this.breathIn;
+        this.noiseHit(0.3, { freq: this.breathIn ? 1300 : 800, sweepTo: this.breathIn ? 1700 : 500, q: 1.4, vol: 0.05, attack: 0.08 });
+      }
+      this.heartT = (this.heartT ?? 0) - dt;
+      if (this.heartT <= 0) {
+        this.heartT = 0.5;
+        this.tone(58, 0.14, { type: 'sine', vol: 0.2 });
+        this.tone(52, 0.12, { type: 'sine', vol: 0.14, at: now + 0.16 });
+      }
+    }
 
     // 拍手（盛り上がりに比例した確率で散発的に）
     if (ctx.playing) {
@@ -343,6 +393,84 @@ export class AudioManager {
         this.noiseHit(0.03, { type: 'highpass', freq: 1400 + Math.random() * 800, vol: 0.02 + Math.random() * 0.03, pan: Math.random() * 1.6 - 0.8 });
       }
     }
+  }
+
+  // ---- 1500m の効果音
+  // レースゲーム区間: 走る速さでうなるエンジン音（人間です）
+  setEngine(on) {
+    if (!this.ctx) return;
+    if (on && !this.engineNodes) {
+      const ctx = this.ctx;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 600;
+      const o1 = ctx.createOscillator();
+      const o2 = ctx.createOscillator();
+      o1.type = o2.type = 'sawtooth';
+      o1.connect(f);
+      o2.connect(f);
+      f.connect(g).connect(this.sfxBus);
+      o1.start();
+      o2.start();
+      g.gain.setTargetAtTime(0.045, ctx.currentTime, 0.2);
+      this.engineNodes = { g, f, o1, o2 };
+    } else if (!on && this.engineNodes) {
+      const { g, o1, o2 } = this.engineNodes;
+      const t = this.ctx.currentTime;
+      g.gain.setTargetAtTime(0, t, 0.1);
+      o1.stop(t + 0.5);
+      o2.stop(t + 0.5);
+      this.engineNodes = null;
+    }
+  }
+  engine(speed) {
+    if (!this.engineNodes) return;
+    const t = this.ctx.currentTime;
+    const f = 38 + speed * 3.4;
+    this.engineNodes.o1.frequency.setTargetAtTime(f, t, 0.08);
+    this.engineNodes.o2.frequency.setTargetAtTime(f * 1.505, t, 0.08);
+    this.engineNodes.f.frequency.setTargetAtTime(300 + speed * 45, t, 0.1);
+  }
+  // 750m: 観客も一瞬静まる
+  hush(seconds) {
+    if (!this.ctx) return;
+    this.hushUntil = this.ctx.currentTime + seconds;
+    this.duckMusic(1, seconds);
+  }
+  // 重力が傾く「ぐぐっ」
+  creak(deg = 30) {
+    this.tone(70 + deg * 0.3, 0.6, { type: 'sawtooth', slideTo: 42, vol: 0.09, cutoff: 500 });
+    this.noiseHit(0.7, { type: 'lowpass', freq: 300, sweepTo: 120, vol: 0.12, attack: 0.05 });
+  }
+  // 最終周回の鐘（カンカンカン）
+  bell() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let i = 0; i < 6; i++) {
+      this.tone(1480, 0.5, { type: 'triangle', vol: 0.08, at: t + i * 0.26 });
+      this.tone(3710, 0.25, { type: 'sine', vol: 0.03, at: t + i * 0.26 });
+    }
+  }
+  // 金ダライ（ゴーン）/ ドラム缶
+  tarai(kind) {
+    if (!this.ctx) return;
+    if (kind === 'drop') {
+      [420, 873, 1290, 1720].forEach((f, i) => this.tone(f, 1.1 - i * 0.2, { type: 'sine', vol: 0.05 - i * 0.008 }));
+    } else this.tone(90, 0.2, { type: 'square', slideTo: 60, vol: 0.06, cutoff: 700 });
+  }
+  setBreath(on) {
+    this.breath = on;
+    this.breathT = 0;
+    this.heartT = 0.2;
+  }
+  // 写真判定のシャッター
+  shutter() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.noiseHit(0.03, { type: 'highpass', freq: 3000, vol: 0.2, at: t });
+    this.noiseHit(0.05, { type: 'highpass', freq: 2200, vol: 0.14, at: t + 0.07 });
   }
 
   duckMusic(amount, seconds) {

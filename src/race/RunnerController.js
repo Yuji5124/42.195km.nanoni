@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { clamp, damp } from '../core/math.js';
-import { createHumanMaterial, createHumanInstances, applyLook, LOOKS } from '../world/RunnerModel.js';
+import { SamuraiModel } from '../world/SamuraiModel.js';
 
 // プレイヤー（侍ランナー）。
 // 入力の「意味」はルールで変わる:
@@ -11,27 +11,14 @@ import { createHumanMaterial, createHumanInstances, applyLook, LOOKS } from '../
 
 const P = CONFIG.player;
 const LIMIT = CONFIG.road.runnerLimit;
-const _m = new THREE.Matrix4();
-const _q = new THREE.Quaternion();
-const _e = new THREE.Euler(0, 0, 0, 'YXZ');
-const _p = new THREE.Vector3();
-const _s = new THREE.Vector3(1, 1, 1);
 
 export class RunnerController {
   constructor(scene, bus, path) {
     this.bus = bus;
     this.path = path;
-    this.material = createHumanMaterial({ mode: 'runner', rim: 0.9, rimColor: 0x39e6ff });
-    this.mesh = createHumanInstances(1, this.material);
-    applyLook(this.mesh, 0, LOOKS.samurai);
-    scene.add(this.mesh);
-
-    // 鉢巻（白） — 侍ランナーの目印
-    this.headband = new THREE.Mesh(
-      new THREE.BoxGeometry(0.28, 0.06, 0.29),
-      new THREE.MeshBasicMaterial({ color: 0xffffff })
-    );
-    scene.add(this.headband);
+    // 主人公だけは専用の関節モデル（CPU は軽いインスタンス人形のまま）
+    this.model = new SamuraiModel();
+    scene.add(this.model.root);
 
     this.position = new THREE.Vector3();
     this.heading = 0;
@@ -68,6 +55,9 @@ export class RunnerController {
     this.lastJumpLength = 0;
     this.distanceRun = 0;
     this.finished = false;
+    this.gravityTilt = 0;
+    this.jumpCount = 0;
+    this.model?.reset();
   }
 
   get airborne() {
@@ -106,7 +96,8 @@ export class RunnerController {
     const rules = ctx.rules ?? {};
     const screen = !!rules.screenControls;
     const control = ctx.canControl && !this.falling && !this.finished;
-    const ax = control ? (ctx.autopilot?.axisX ?? input.axisX) : 0;
+    // 鏡の世界: 画面に合わせて左右を入れ替える（rules.invertX）
+    const ax = (control ? (ctx.autopilot?.axisX ?? input.axisX) : 0) * (rules.invertX && !screen && !ctx.autopilot ? -1 : 1);
     const ay = control ? (ctx.autopilot?.axisY ?? input.axisY) : 0;
     const dashHeld = control && (ctx.autopilot?.dash ?? input.held('dash'));
     // シューティング中は SPACE = 射撃（ジャンプしない）
@@ -155,8 +146,11 @@ export class RunnerController {
     }
     this.vx = damp(this.vx, targetVx, 14, dt);
     // カーブでは外側へふくらむ（速いほど強い）→ 曲がりに合わせて内側へ操作する
-    const drift = typeof rules.lane === 'number' ? 0 : this.path.kappa(this.s) * this.speed * this.speed * 0.45;
+    let drift = typeof rules.lane === 'number' ? 0 : this.path.kappa(this.s) * this.speed * this.speed * 0.45;
+    // 重力が横にずれた区間: 「下」になった側へ少しずつ引っぱられる
+    if (rules.pullX && typeof rules.lane !== 'number') drift += rules.pullX;
     this.drift = drift;
+    this.carLean = !!rules.carLean;
     this.x = clamp(this.x + (this.vx + drift) * dt, -LIMIT, LIMIT);
 
     // ---- ジャンプ（先行入力 + コヨーテタイム、長押しで高く）
@@ -168,6 +162,7 @@ export class RunnerController {
       this.coyote = 0;
       this.jumpBuffer = 0;
       this.jumpStartS = this.s;
+      this.jumpCount++;
       this.bus.emit('playerJump', {});
     }
     if (!this.grounded) {
@@ -206,62 +201,78 @@ export class RunnerController {
     this.invuln = Math.max(0, this.invuln - dt);
     this.bumpCooldown = Math.max(0, this.bumpCooldown - dt);
 
-    // ---- 足音
-    const prevPhase = this.phase;
     this.phase += dt * (4 + this.speed * 0.62);
-    if (this.grounded && !this.falling && this.speed > 2 && Math.floor(prevPhase / Math.PI) !== Math.floor(this.phase / Math.PI)) {
+    this.updateVisual(dt, ctx);
+    // 足音はモデルの接地に合わせる
+    if (this.grounded && !this.falling && this.speed > 2 && this.model.touchdowns > 0) {
       this.bus.emit('footstep', { speed: this.speed });
     }
-
-    this.updateVisual(dt);
   }
 
-  updateVisual(dt) {
+  updateVisual(dt, ctx = {}) {
     this.yaw = damp(this.yaw, -this.vx * 0.045, 10, dt);
     const f = this.path.sample(this.s);
     this.heading = f.theta;
-    const anim = this.mesh.geometry.attributes.iAnim;
     let pitch = 0;
     let roll = 0;
     let lift = this.y;
-    let amp;
     if (this.falling) {
       const t = 1 - this.fallTimer / P.fallDuration;
       pitch = -Math.min(1, t * 3) * 1.35;
       roll = Math.sin(t * 9) * 0.25 * (1 - t);
       lift = Math.max(0, Math.sin(Math.min(1, t * 3) * Math.PI) * 0.4);
-      amp = 0.25;
-      anim.setXY(0, this.phase * 0.2, amp);
-    } else {
-      amp = this.speed < 1 ? 0.15 : this.grounded ? Math.min(1.25, 0.55 + this.speed / 22) : 0.35;
-      anim.setXY(0, this.phase, amp);
+    } else if (this.carLean) {
+      // レースゲーム区間: 車のようにコーナー・車線変更で体を傾ける
+      roll = clamp(this.path.kappa(this.s) * this.speed * this.speed * 0.1 - this.vx * 0.06, -0.5, 0.5);
     }
-    anim.needsUpdate = true;
 
-    _e.set(pitch, f.theta + this.yaw, roll, 'YXZ');
-    _q.setFromEuler(_e);
-    const visible = this.invuln <= 0 || Math.floor(this.invuln * 14) % 2 === 0;
-    _s.setScalar(visible ? 1 : 0.0001);
-    _m.compose(_p.set(f.x + f.cos * this.x, lift, f.z - f.sin * this.x), _q, _s);
-    this.mesh.setMatrixAt(0, _m);
-    this.mesh.instanceMatrix.needsUpdate = true;
-
-    // 鉢巻は頭の位置に追従（転倒中は隠す）
-    this.headband.visible = visible && !this.falling;
-    // シェーダー側の前傾（rotX(-0.12 * amp)）と揃える
-    const lean = 0.12 * amp;
-    const bob = Math.abs(Math.cos(this.phase)) * 0.07 * amp;
-    const headY = 1.7 + bob;
-    this.path.toWorld(this.s + headY * Math.sin(lean), this.x, lift + headY * Math.cos(lean), this.headband.position);
-    this.headband.rotation.set(-lean, this.heading + this.yaw, 0, 'YXZ');
+    const m = this.model;
+    m.animate({
+      dt,
+      speed: this.speed,
+      grounded: this.grounded,
+      y: this.y,
+      vy: this.vy,
+      vx: this.vx,
+      falling: this.falling,
+      stumble: this.stagger,
+      dashing: this.dashing,
+      ready: !!ctx.ready,
+      gravityTilt: this.gravityTilt,
+      jumpLead: this.jumpCount % 2 ? 1 : -1,
+    });
+    const root = m.root;
+    root.position.set(f.x + f.cos * this.x, lift, f.z - f.sin * this.x);
+    root.rotation.set(pitch, f.theta + this.yaw, roll, 'YXZ');
+    root.visible = this.invuln <= 0 || Math.floor(this.invuln * 14) % 2 === 0;
 
     this.path.toWorld(this.s, this.x, this.y, this.position);
-    this.material.userData.uniforms.uRim.value = 0.6 + (this.dashing ? 0.8 : 0) + (this.boostTimer > 0 ? 0.6 : 0);
+    m.setRim(undefined, 0.45 + (this.dashing ? 0.7 : 0) + (this.boostTimer > 0 ? 0.5 : 0));
+  }
+
+  // 鏡の世界のもう一人の侍（半透明）。区間の演出側が place() で毎フレーム置く
+  createGhost(scene) {
+    const model = new SamuraiModel({ ghost: true });
+    model.setRim(0x9ff2ff, 1.8);
+    model.root.visible = false;
+    scene.add(model.root);
+    const path = this.path;
+    return {
+      model,
+      show(v) {
+        model.root.visible = v;
+      },
+      // yaw = π で「こちらを向いて」後ろ向きに走る（ムーンウォーク）
+      place(s, x, y, yaw, speed, dt) {
+        const f = path.sample(s);
+        model.animate({ dt, speed, grounded: y <= 0.001, y, vy: 0, vx: 0, falling: false, stumble: 0, reverse: true });
+        model.root.position.set(f.x + f.cos * x, y, f.z - f.sin * x);
+        model.root.rotation.set(0, f.theta + yaw, 0, 'YXZ');
+      },
+    };
   }
 
   setGlow(color, strength) {
-    const u = this.material.userData.uniforms;
-    u.uRimColor.value.set(color);
-    u.uRim.value = strength;
+    this.model.setRim(color, strength);
   }
 }

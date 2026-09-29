@@ -152,6 +152,8 @@ export class Game {
     this.chunks = new TokyoChunkManager(scene, this.distance, data, this.path);
     this.crowd = new CrowdManager(scene, this.distance, this.events, this.path);
     this.chunks.landmarkCtx.crowdMaterial = this.crowd.material;
+    this.chunks.landmarkCtx.raceTime = () => this.distance.raceTime;
+    this.chunks.landmarkCtx.quality = () => this.fx?.quality ?? 2;
     this.course = new CourseManager(scene, this.bus, this.distance, this.events, this.path);
     this.player = new RunnerController(scene, this.bus, this.path);
     this.marker = this.buildMarker();
@@ -295,7 +297,7 @@ export class Game {
     bus.on('event', ({ event, state, before, silent }) => {
       const camChanged = state.camera !== before.camera || silent;
       if (camChanged && this.race.running) {
-        const cut = state.camera === MODES.TV_BROADCAST;
+        const cut = state.camera === MODES.TV_BROADCAST || state.transition === 'cut';
         const transition = state.camera === MODES.SIDE_2D ? 1.7 : before.camera === MODES.SIDE_2D ? 1.5 : 1.2;
         cam.setMode(state.camera, { transition, cut });
         fx.glitchBurst(cut ? 1 : 0.75);
@@ -481,9 +483,12 @@ export class Game {
     bus.on('finish', ({ position }) => {
       this.slowMo = 1.5;
       cam.goalS = this.race.goalS;
-      cam.setMode(MODES.GOAL, { transition: 0.8 });
+      // 1500m は写真判定の演出を区間側が持つ
+      if (!this.sections?.onFinish(position)) {
+        cam.setMode(MODES.GOAL, { transition: 0.8 });
+        fx.setPreset('goal');
+      }
       this.chunks.getLandmark('goalArch')?.breakTape?.();
-      fx.setPreset('goal');
       fx.flash(0.5);
       fx.confettiBurst(player.position, 380, 11);
       audio.goal();
@@ -649,8 +654,9 @@ export class Game {
     this.last = now;
     this.handleGlobalInput();
     if (this.freeze > 0) {
-      // 世界が止まる（750m の「まだ半分です。」）。描画は最後のフレームのまま
+      // 世界が止まる（750m の「まだ半分です。」/ 写真判定）。カメラも止まり、画面のエフェクトだけ動く
       this.freeze -= realDt;
+      this.fx.update(realDt, { player: this.player, tier: this.cheer.tier, excitement: this.cheer.excitement, playing: false });
     } else if (!this.paused) {
       if (this.slowMo > 0) {
         this.slowMo -= realDt;
@@ -701,6 +707,8 @@ export class Game {
       cheerBonus: cheer.powerBonus,
       autopilot: this.autopilot && running ? this.autopilotInput() : null,
       finishedJog: race.state === RACE.FINISHING || race.state === RACE.RESULT,
+      // 「よーい」でスタートの構え
+      ready: race.state === RACE.COUNTDOWN && race.countdown <= 2.05,
     });
     this.course.update(dt, player, running);
     this.ai.update(dt, {
@@ -712,6 +720,7 @@ export class Game {
       goalS: race.goalS,
       excitement: cheer.excitement,
       stopLine: this.gags.stopLine,
+      avoid: this.sections?.avoidFn,
     });
     // シューティング中の射撃（SPACE / JUMP 長押しで連射）
     const fire = running && !!rules.shooter && (this.autopilot ? true : this.input.held('jump'));
@@ -737,7 +746,10 @@ export class Game {
     this.cameraDirector.update(dt, { player, time: this.time, roll });
     this.ui.cctvTime(this.distance.raceTime);
     const camMode = this.cameraDirector.mode;
-    this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D || camMode === MODES.TOP_DOWN);
+    // 自分を見失いやすい視点では頭上に YOU マーカー（中継・真横・真上・写真判定・重力が傾いた区間）
+    const tilted = Math.abs(this.sections?.tilt ?? 0) > 5;
+    this.marker.visible =
+      playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D || camMode === MODES.TOP_DOWN || camMode === MODES.PHOTO || tilted);
     this.path.toWorld(player.s, player.x, player.y + 2.7 + Math.sin(this.time * 6) * 0.1, this.marker.position);
     // カメラとプレイヤーの間にいる AI ランナーは透かす（主役が群衆に埋もれないように）
     const cp = this.camera.position;

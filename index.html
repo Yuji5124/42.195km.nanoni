@@ -65,11 +65,29 @@
       <!-- ===== TV 中継テロップ ===== -->
       <div id="tv" class="tv hidden">
         <div class="live">● LIVE</div>
-        <div class="tv-title">TOKYO DIGITAL MARATHON<br /><small>生中継</small></div>
+        <div id="tvTitle" class="tv-title">TOKYO DIGITAL MARATHON<br /><small>生中継</small></div>
         <div class="lower-third">
           <span id="tvPos">-位</span><span class="name">侍ランナー</span><span id="tvKm">0.0km</span>
         </div>
       </div>
+
+      <!-- ===== 1500m: スポーツ中継のティッカー ===== -->
+      <div id="ticker" class="ticker hidden">
+        <div class="tk-top"><span id="tkLap">LAP 3 / 4</span><span id="tkLapTime">0:00.0</span></div>
+        <div class="tk-bar">
+          <span class="tk-label">1500m 決勝</span>
+          <div class="tk-scroll"><span id="tkScroll"></span></div>
+        </div>
+      </div>
+
+      <!-- ===== 1500m: 写真判定 ===== -->
+      <div id="photoFinish" class="photo-finish hidden">
+        <div class="pf-line"></div>
+        <div class="pf-label"><span>PHOTO FINISH</span><b id="pfTime">0:00.00</b><small id="pfPos"></small></div>
+      </div>
+
+      <!-- ===== 1500m: 750m ===== -->
+      <div id="bigDist" class="big-dist"><b>750m</b><small>まだ半分です。</small></div>
 
       <!-- ===== 監視カメラ ===== -->
       <div id="cctv" class="cctv hidden">

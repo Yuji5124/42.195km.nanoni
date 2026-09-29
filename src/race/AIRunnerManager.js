@@ -254,6 +254,12 @@ export class AIRunnerManager {
         }
       }
 
+      // 見下ろし回避: 警告エリアから逃げる
+      if (ctx.avoid && ctx.running) {
+        const push = ctx.avoid(s[i], x[i]);
+        if (push) this.targetX[i] = clamp(x[i] + push, -LIMIT, Math.min(LIMIT, maxX));
+      }
+
       if (!blocked && ctx.running && Math.abs(this.targetX[i] - this.prefX[i]) > 0.05 && this.rng.chance(dt * 0.3)) {
         this.targetX[i] = this.prefX[i];
       }
@@ -267,7 +273,7 @@ export class AIRunnerManager {
       this.speed[i] = damp(this.speed[i], target, acc * 0.35, dt);
       const tvx = clamp((this.targetX[i] - x[i]) * 3, -3.2, 3.2);
       this.vx[i] = damp(this.vx[i], tvx, 8, dt);
-      x[i] = clamp(x[i] + this.vx[i] * dt, -LIMIT, LIMIT);
+      x[i] = clamp(x[i] + (this.vx[i] + (rules.pullX ?? 0) * 0.7) * dt, -LIMIT, LIMIT);
       s[i] += this.speed[i] * dt;
       if (this.y[i] > 0) {
         this.vy[i] -= CONFIG.player.gravity * dt;

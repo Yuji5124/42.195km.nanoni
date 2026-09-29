@@ -72,5 +72,6 @@ export const MODES = {
   CCTV: 'CCTV',
   START: 'START',
   GOAL: 'GOAL',
+  PHOTO: 'PHOTO', // 1500m: 写真判定カメラ（フィニッシュラインの真横）
   TITLE: 'TITLE',
 };
