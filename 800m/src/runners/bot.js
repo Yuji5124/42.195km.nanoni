@@ -9,6 +9,9 @@ import { clamp, curve } from '../core/mathx.js';
 //
 // env: { crowd 0〜1, cheer 0〜100, chaos 0〜1, cameraSubject: runnerIndex | -1 }
 
+// CPU 全体の底上げ（上手いプレイヤーが「勝てるけど楽勝ではない」くらい）
+const PACE_BONUS = 0.018;
+
 const MYSTERY_POOL = ['SPRINTER', 'PACER', 'CHASER', 'SHOWMAN', 'PANIC', 'LATE', 'CAMERA', 'QUIET', 'CHAOS', 'DRAFTER'];
 
 export class Bot {
@@ -46,7 +49,7 @@ export class Bot {
   intent(core, r, env = {}) {
     const p = this.p;
     const d = r.d;
-    let e = curve(p.pace, d);
+    let e = curve(p.pace, d) + (this.personality === 'AUTOPILOT' ? 0 : PACE_BONUS);
     const s = p.sense ?? {};
     if (s.crowd) e += s.crowd * ((env.crowd ?? 0.5) - 0.4) * 2;
     if (s.quiet) e += s.quiet * (0.6 - (env.crowd ?? 0.5)) * 2;
@@ -62,12 +65,12 @@ export class Bot {
         }
       }
     }
-    // 前の選手
+    // 前の選手（ほぼ同じレーンにいる人だけ。真横を走っている人は「前」ではない）
     let ahead = null;
     let aheadGap = Infinity;
     for (const o of core.runners) {
       const gap = o.d - r.d;
-      if (o !== r && !o.finished && gap > 0 && gap < aheadGap && Math.abs(o.off - r.off) < 1.6) {
+      if (o !== r && !o.finished && gap > 0.3 && gap < aheadGap && Math.abs(o.off - r.off) < 0.9) {
         ahead = o;
         aheadGap = gap;
       }
@@ -82,22 +85,27 @@ export class Bot {
     e += Math.sin(core.time * 0.4 + this.wobble) * 0.012;
     e = clamp(e, 0.5, PHYS.effort.push);
 
-    // 終盤は残りのスタミナを使い切る（残り距離あたりのスタミナで、攻め / スパートを決める）
-    let burst = d >= p.kick.at && r.stamina > p.kick.stamina;
+    // 終盤は残りのスタミナを使い切る（残り 1m あたりのスタミナで、攻め / スパートを決める）
+    //   スパートは 1m あたり約 0.9 使う → 走り切れる分があればスパート、なければ攻め
+    //   最後の 40m は全員が全力（ここが本当のレース）
     const remain = Math.max(1, 800 - d);
-    if (d > 640) {
-      const perM = r.stamina / remain;
-      if (perM > 0.11) burst = true;
-      else if (perM > 0.045) e = Math.max(e, PHYS.effort.push);
+    const perM = r.stamina / remain;
+    let burst = d >= p.kick.at && perM > 0.8;
+    if (d > 600) {
+      if (perM > 0.95) burst = true;
+      else if (perM > 0.2) e = Math.max(e, PHYS.effort.push);
     }
+    if (d >= 760 && r.stamina > 2) burst = true;
 
     // レーン: 基本は内側。前が詰まっていて自分の方が速い → 外へ出て抜く
     const inside = laneCenter(1) + (1 - (p.inside ?? 0.7)) * 1.4;
     let targetOff = r.targetOff ?? r.off;
     if (d > 60 || core.startDistance > 0) targetOff = inside;
-    if (r.blocked || (ahead && aheadGap < 2.4 && (s.chase ? false : e > ahead.effortEff + 0.02))) {
+    if (this.passTimer <= 0 && (r.blocked || (ahead && aheadGap < 2.4 && (s.chase ? false : e > ahead.effortEff + 0.02)))) {
+      // 外から抜く。外に余裕がなければ内から（大外に張り付かない）
+      const base = ahead ? ahead.off : r.off;
       this.passTimer = 2.2;
-      this.passOff = clamp(ahead ? ahead.off + 1.15 : r.off + 1.15, 0, MAX_OFF);
+      this.passOff = base + 1.15 <= MAX_OFF - 1.0 ? base + 1.15 : clamp(base - 1.15, 0, MAX_OFF);
     }
     if (s.chase && ahead && aheadGap < 6 && !r.blocked) targetOff = ahead.off; // 真後ろへ（ドラフト）
     if (this.passTimer > 0) {

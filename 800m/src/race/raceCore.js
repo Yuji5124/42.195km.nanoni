@@ -188,19 +188,30 @@ export class RaceCore {
     }
   }
 
-  // 真横に並んだ選手どうしは少し押し合う（重ならない）
+  // 真横に並んだ選手どうしは重ならない。譲るのは後ろの選手（前にいる方が優先 = 前の選手を大外へ押し出さない）
   separate() {
     const rs = this.runners;
     for (let a = 0; a < this.n; a++) {
       for (let b = a + 1; b < this.n; b++) {
         const A = rs[a];
         const B = rs[b];
-        if (Math.abs(A.d - B.d) > 0.7) continue;
+        const dd = A.d - B.d;
+        if (Math.abs(dd) > 0.7) continue;
         const dx = B.off - A.off;
         if (Math.abs(dx) < 0.48) {
-          const push = (0.48 - Math.abs(dx)) * 0.5 * (dx >= 0 ? 1 : -1);
-          A.off = clamp(A.off - push, 0, MAX_OFF);
-          B.off = clamp(B.off + push, 0, MAX_OFF);
+          const push = (0.48 - Math.abs(dx)) * (dx >= 0 ? 1 : -1);
+          // ほぼ並んでいる時は半分ずつ、差がある時は後ろの選手が 8 割よける
+          const wA = Math.abs(dd) < 0.15 ? 0.5 : dd < 0 ? 0.8 : 0.2;
+          A.off = clamp(A.off - push * wA, 0, MAX_OFF);
+          B.off = clamp(B.off + push * (1 - wA), 0, MAX_OFF);
+          // 壁際で押し返せない分は相手が引き受ける
+          if (A.off <= 0 || B.off >= MAX_OFF) {
+            const over = 0.48 - Math.abs(B.off - A.off);
+            if (over > 0) {
+              if (A.off <= 0) B.off = clamp(B.off + over, 0, MAX_OFF);
+              else A.off = clamp(A.off - over, 0, MAX_OFF);
+            }
+          }
         }
       }
     }
@@ -214,7 +225,7 @@ export class RaceCore {
     else if (dist < 0.11) grade = 'GOOD';
     if (grade === 'PERFECT') r.rhythmStreak++;
     else if (grade === 'MISS') r.rhythmStreak = 0;
-    r.rhythmBonus = Math.min(0.02, r.rhythmStreak * 0.002);
+    r.rhythmBonus = Math.min(0.012, r.rhythmStreak * 0.0015);
     if (r.isPlayer) this.bus.emit(EV.RHYTHM, { grade, streak: r.rhythmStreak });
     return grade;
   }
@@ -241,6 +252,7 @@ export class RaceCore {
     this.lastRank = p.rank;
     while (p.d >= this.nextMark && this.nextMark <= 800) {
       this.bus.emit(EV.DISTANCE, { meters: this.nextMark });
+      this.bus.emit(`DISTANCE_${this.nextMark}`, { meters: this.nextMark }); // DISTANCE_100 など（購読しやすい別名）
       this.nextMark += 100;
     }
     if (!this.flags.lap2 && p.d >= 400) {

@@ -4,7 +4,7 @@ import { buildSamurai, buildAthlete, buildStick } from './runnerBuilder.js';
 import { RunnerAnimator } from './animation.js';
 import { trackPoint, curvature } from '../race/trackLogic.js';
 import { patchMaterial } from '../fx/materialPatch.js';
-import { clamp } from '../core/mathx.js';
+import { clamp, lerp } from '../core/mathx.js';
 
 // 12 人の見た目。RaceCore の値を読んで置くだけ（書き換えない）。
 // 見た目の変形（巨大化・頭だけ巨大・棒人間・透明・世界の変形）は Presentation（P.runner）から受け取る。
@@ -78,6 +78,13 @@ export class RunnerManager {
     this.shadows.frustumCulled = false;
     this.shadows.renderOrder = 1;
     scene.add(this.shadows);
+    // 主人公の足元の輪: 遠いカメラ（真上・中継・防犯カメラ）でも自分がどこか分かる
+    this.marker = new THREE.Mesh(
+      new THREE.RingGeometry(0.62, 0.86, 40).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: 0x39e6ff, transparent: true, opacity: 0, depthWrite: false, fog: false })
+    );
+    this.marker.renderOrder = 2;
+    scene.add(this.marker);
     this._m = new THREE.Matrix4();
   }
 
@@ -110,11 +117,26 @@ export class RunnerManager {
       head: new THREE.Vector3(),
       heading: 0,
       roll: 0,
+      samurai,
+      legPhase: 0,
+      lastPhase: null,
     };
   }
 
   reset() {
-    for (const v of this.views) v.anim.reset();
+    for (const v of this.views) {
+      v.anim.reset();
+      v.lastPhase = null;
+    }
+  }
+
+  // 脚の回転だけ速く / 遅く（P.runner.*LegSpeed）。普段は RaceCore の歩数にゆっくり合わせ直す
+  legPhase(view, r, speed, dt) {
+    if (view.lastPhase === null || Math.abs(r.phase - view.lastPhase) > 4) view.legPhase = r.phase;
+    else view.legPhase += (r.phase - view.lastPhase) * speed;
+    if (speed === 1) view.legPhase += (r.phase - view.legPhase) * Math.min(1, dt * 2.5);
+    view.lastPhase = r.phase;
+    return view.legPhase;
   }
 
   // 変形後の世界で、(d, off) に立つ位置と地面の向き（法線）
@@ -168,11 +190,12 @@ export class RunnerManager {
       const stick = R.stick || (R.stickOthers && !view.def.isPlayer);
       view.mesh.visible = !stick;
       view.stick.visible = stick;
+      if (view.samurai) view.bones.sword.scale.setScalar(lerp(1, 3.6, R.giantSword));
       const animState = raceState === 'marks' || raceState === 'set' ? raceState : 'run';
       view.anim.update({
         dt: dt * (view.def.isPlayer ? R.playerAnimSpeed : R.otherAnimSpeed),
         v: r.v,
-        phase: r.phase,
+        phase: this.legPhase(view, r, view.def.isPlayer ? R.playerLegSpeed : R.otherLegSpeed, dt),
         stepFreq: r.stepFreq,
         stamina: r.stamina,
         d: r.d,
@@ -180,6 +203,7 @@ export class RunnerManager {
         lateral: lateral,
         state: animState,
         gravity: P.world.gravity,
+        wind: P.world.wind,
         finished: r.finished,
         won: r.finished && core.finishOrder[0] === r.index,
       });
@@ -188,6 +212,15 @@ export class RunnerManager {
       view.heading = pt.heading;
       this._m.compose(_a.copy(view.pos).addScaledVector(_n, 0.03), _q, _b.set(0.9 * scale, 1, 0.9 * scale));
       this.shadows.setMatrixAt(view.index, this._m);
+      if (view.def.isPlayer) {
+        const mk = this.marker;
+        mk.position.copy(view.pos).addScaledVector(_n, 0.05);
+        mk.quaternion.copy(_q);
+        mk.scale.setScalar(scale);
+        const far = camera ? camera.position.distanceTo(view.pos) : 0;
+        mk.material.opacity = clamp((far - 9) / 22, 0, 0.85);
+        mk.visible = mk.material.opacity > 0.01;
+      }
     }
     this.shadows.instanceMatrix.needsUpdate = true;
     // 被写体の手前（カメラとの間）にいる選手を透かす

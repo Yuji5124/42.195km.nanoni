@@ -12,9 +12,9 @@ export const DEFAULTS = {
     fovMul: 1,
     roll: 0,
     shake: 0,
-    label: '',
+    label: '', // 画面右上のカメララベル（変わった時だけ表示）
     split4: false,
-    lowAngle: 0,
+    lowAngle: 0, // 0〜1: 追従カメラを低く（レースゲーム風）
   },
   post: {
     fisheye: 0,
@@ -32,7 +32,7 @@ export const DEFAULTS = {
     flipY: 0,
     tall: 0, // 縦画面（左右に黒帯）
     wide: 0, // 横長すぎ（上下に黒帯）
-    frameHold: 1, // 何フレームに 1 回描くか（疑似 Low FPS）
+    lowFps: 0, // 疑似 Low FPS（0 = なし / 12, 8, 4 …）。ゲームの更新は 60fps のまま
     noise: 0.015,
     bloom: 1,
     snap: 0, // PS1 の頂点スナップ
@@ -54,13 +54,10 @@ export const DEFAULTS = {
     tilt: 0,
     twist: 0,
     fold: 0,
-    weather: null, // 'rain' | 'snow' | 'typhoon'
+    weather: null, // 'rain' | 'snow'
     weatherAmt: 0,
-    trackOpacity: 1,
-    stadium: 1, // 0 = 競技場が消える（宇宙・雲の上・海の上）
-    floor: null, // 'clouds' | 'sea' | 'city'
-    infinite: 0,
-    standsMove: 0,
+    stadium: 1, // 0 = スタンド・照明・観客が消える（宇宙・雲の上・海の上）
+    floor: null, // 'clouds' | 'sea' | 'space'（トラックの外側の床）
     wind: 0,
   },
   runner: {
@@ -75,10 +72,9 @@ export const DEFAULTS = {
     playerRim: 0.25,
     playerAnimSpeed: 1,
     otherAnimSpeed: 1,
-    ghostTrail: 0,
-    shadowRunner: 0,
+    playerLegSpeed: 1, // 脚の回転だけ（進む速さは RaceCore のまま）
+    otherLegSpeed: 1,
     giantSword: 0,
-    propeller: 0,
   },
   crowd: {
     energyMul: 1,
@@ -99,8 +95,8 @@ export const DEFAULTS = {
     liar: 0, // 距離表示が嘘
     lapBug: 0,
     boardMirror: false,
-    simplify: 0,
-    hide: 0,
+    rec: false, // 防犯カメラの ● REC
+    pip: 0, // 小窓で自分を映す（違うカメラの時）
   },
   audio: {
     music: 1,
@@ -113,6 +109,7 @@ export const DEFAULTS = {
     bpmMul: 1,
     silence: 0,
     chip: 0,
+    focus: 0, // ラスト 40m: 足音・呼吸・歓声だけに寄せる（0〜1）
   },
   time: {
     sim: 1, // 世界の時間（全員に等しく）

@@ -67,7 +67,7 @@ export class RunnerAnimator {
     return thighA;
   }
 
-  // st: { dt, v, phase, stepFreq, stamina, d, burst, lateral, state, gravity, finished, won, reverse }
+  // st: { dt, v, phase, stepFreq, stamina, d, burst, lateral, state, gravity, wind, finished, won }
   update(st) {
     const dt = Math.min(0.05, st.dt);
     this.time += dt;
@@ -96,11 +96,11 @@ export class RunnerAnimator {
     const sweep = moving ? (v * duty) / cycle : 0;
     const psiL = fract((st.phase ?? 0) / 2);
     const psiR = fract(((st.phase ?? 0) - 1) / 2);
-    const lift = (0.13 + 0.32 * Sp) * (1 - 0.35 * F) * (gravity < 1 ? 1.6 : gravity > 1 ? 0.6 : 1);
+    const lift = (0.13 + 0.32 * Sp) * (1 - 0.35 * F) * (gravity < 1 ? 1 + (1 - gravity) * 0.8 : Math.max(0.55, 1 - (gravity - 1) * 0.3));
     const kickBack = (0.1 + 0.2 * Sp) * (1 - 0.3 * F);
 
     // ---- 骨盤の高さ: 接地の真ん中で低く、空中で高い（重力が弱いと大きく弾む）
-    const bobAmp = (0.012 + 0.028 * Sp + 0.012 * F) * (gravity < 1 ? 3.2 : gravity > 1 ? 0.35 : 1);
+    const bobAmp = (0.012 + 0.028 * Sp + 0.012 * F) * (gravity < 1 ? 1 + (1 - gravity) * 3 : Math.max(0.3, 1 - (gravity - 1) * 0.5));
     const bob = moving ? -Math.cos(4 * Math.PI * (psiL - duty / 2)) * bobAmp : Math.sin(this.time * 1.8) * 0.004;
     let hipY = 0.93 - 0.03 * Sp - 0.02 * F + bob - this.ready * 0.16 - startDrive * 0.05;
     if (gravity > 1) hipY -= 0.08 * (gravity - 1);
@@ -196,17 +196,17 @@ export class RunnerAnimator {
 
     // ---- ばね（衣装）
     if (this.costume) {
-      const flutter = Math.sin(this.time * 19) * (0.06 + 0.16 * Sp);
+      const wind = st.wind ?? 0; // 強風（見た目だけ）: 布がばたつく
+      const flutter = Math.sin(this.time * (19 + wind * 14)) * (0.06 + 0.16 * Sp + 0.3 * wind);
       const g = gravity;
       S.top.x.v += hipAcc * 0.012;
       S.top.step(dt, -0.25 - v * 0.035, (st.lateral ?? 0) * 0.08);
       b.topknot.rotation.set(S.top.x.x, 0, S.top.y.x);
-      S.band1.step(dt, -0.35 - Math.min(1.2, v * 0.1) - (g < 1 ? 0.6 : 0), (st.lateral ?? 0) * 0.1);
+      S.band1.step(dt, -0.35 - Math.min(1.2, v * 0.1) - (g < 1 ? 0.6 : 0) - wind * 0.5, (st.lateral ?? 0) * 0.1);
       b.bandTail1.rotation.set(S.band1.x.x + flutter * 0.4, 0, S.band1.y.x);
       b.bandTail2.rotation.x = S.band2.step(dt, flutter + S.band1.x.x * 0.2);
       // 羽織の背: 走ると後ろへあおられる
-      S.haori.x = S.haori.x ?? 0;
-      b.haori.rotation.x = -S.haori.step(dt, Math.min(0.9, v * 0.06) + (g < 1 ? 0.4 : 0));
+      b.haori.rotation.x = -S.haori.step(dt, Math.min(0.9, v * 0.06) + (g < 1 ? 0.4 : 0) + wind * (0.6 + 0.25 * Math.sin(this.time * 23)));
       // 刀: 腰の上下とひねりで揺れる
       S.sword.x.v += hipAcc * 0.01;
       S.sword.step(dt, 0.38 + v * 0.004, -twist * 0.8 - (st.lateral ?? 0) * 0.03);

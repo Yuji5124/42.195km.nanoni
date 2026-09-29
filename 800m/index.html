@@ -61,6 +61,10 @@
         <div class="skin skin-minimal">
           <div class="mn-dist"><b data-v="remain">40</b><small>m</small></div>
         </div>
+        <!-- 防犯カメラの REC / 違うカメラの時の小窓の枠 -->
+        <div class="rec-tag">● REC <span data-v="time">0:00.00</span></div>
+        <div class="pipframe"><span>YOU</span></div>
+        <div class="splitgrid"><i>CAM 1 FOLLOW</i><i>CAM 2 TV</i><i>CAM 3 TOP</i><i>CAM 4 FRONT</i></div>
       </div>
 
       <div id="fakebug" class="fakebug hidden"></div>
@@ -93,9 +97,13 @@
       <div id="result" class="screen result hidden">
         <div class="r-wrap">
           <div class="r-head">MEN'S 800m FINAL ─ RESULT</div>
-          <table class="r-table"><tbody data-results></tbody></table>
-          <div class="r-had"><div class="r-had-title">THIS RACE HAD:</div><ul data-had></ul></div>
-          <div class="r-foot"><span class="r-seed">SEED: <b data-v="seed">0</b></span><button data-action="same">同じ seed でもう一回（R）</button><button data-action="new">新しい seed（N / SPACE）</button></div>
+          <div class="r-body">
+            <table class="r-table"><tbody data-results></tbody></table>
+            <div class="r-side">
+              <div class="r-had"><div class="r-had-title">THIS RACE HAD:</div><ul data-had></ul></div>
+              <div class="r-foot"><span class="r-seed">SEED: <b data-v="seed">0</b></span><button data-action="same">同じ seed でもう一回（R）</button><button data-action="new">新しい seed（N / SPACE）</button></div>
+            </div>
+          </div>
         </div>
       </div>
 

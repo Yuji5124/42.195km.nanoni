@@ -11,7 +11,8 @@
     "smoke": "vite build && node 800m/tools/smoke.mjs",
     "race-test": "vite build && node 800m/tools/raceTest.mjs",
     "filmstrip": "vite build && node 800m/tools/filmstrip.mjs",
-    "benchmark": "vite build && node 800m/tools/benchmark.mjs"
+    "benchmark": "vite build && node 800m/tools/benchmark.mjs",
+    "gallery": "vite build && node 800m/tools/gallery.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

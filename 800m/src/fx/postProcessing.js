@@ -8,7 +8,8 @@ import { damp } from '../core/mathx.js';
 
 // ポストエフェクト: RenderPass → Bloom → Output（sRGB）→ NanoniPass（表示の壊し方をまとめた 1 パス）
 // NanoniPass の各項目は Presentation（P.post）の数値そのまま。Modifier は数値を書くだけ。
-// 疑似 Low FPS は「描かないフレーム」を作るだけ（ゲームの更新は 60fps のまま）。
+// 疑似 Low FPS は「描かないフレーム」を作るだけ（ゲームの更新は 60fps のまま）。前の絵がそのまま残る。
+// 小窓（PIP）: 違うカメラを映している間も、自分の走りを右下に出す（操作できなくならないように）。
 
 const NanoniShader = {
   uniforms: {
@@ -176,9 +177,11 @@ class MultiRenderPass extends RenderPass {
     this.cameras.forEach((cam, i) => {
       const [x, y] = q[i];
       if (target) {
+        // レンダーターゲットのビューポートは setRenderTarget の時に読まれる → 毎回設定し直す
         target.viewport.set(x, y, w / 2, h / 2);
         target.scissor.set(x, y, w / 2, h / 2);
         target.scissorTest = true;
+        renderer.setRenderTarget(target);
       } else {
         renderer.setViewport(x, y, w / 2, h / 2);
         renderer.setScissor(x, y, w / 2, h / 2);
@@ -189,6 +192,7 @@ class MultiRenderPass extends RenderPass {
       target.viewport.set(0, 0, w, h);
       target.scissor.set(0, 0, w, h);
       target.scissorTest = false;
+      renderer.setRenderTarget(target);
     }
     renderer.setScissorTest(false);
     renderer.autoClear = true;
@@ -265,15 +269,37 @@ export class PostProcessing {
     u.uFlash.value = this.flash;
     u.uFade.value = this.fade;
     this.bloom.strength = this.baseBloom * post.bloom;
-    this.frameHold = Math.max(1, Math.round(post.frameHold));
+    this.lowFps = post.lowFps;
+    this.holdT = (this.holdT ?? 0) + dt;
   }
 
-  // 疑似 Low FPS: frameHold フレームに 1 回だけ描く
-  render(cameras4 = null) {
+  // 疑似 Low FPS: 1/lowFps 秒に 1 回だけ描く（時間で数えるので、端末が遅くても同じ見え方）
+  render(cameras4 = null, pip = null) {
     this.frame++;
-    if (this.frameHold > 1 && this.frame % this.frameHold !== 0) return false;
+    if (this.lowFps > 0) {
+      if (this.holdT < 1 / this.lowFps) return false;
+      this.holdT %= 1 / this.lowFps;
+    } else this.holdT = 0;
     this.renderPass.cameras = cameras4;
     this.composer.render();
+    if (pip) this.renderPip(pip);
     return true;
+  }
+
+  // 右下の小窓（ポストエフェクトなし・枠は HUD の CSS）
+  renderPip({ scene, camera, rect }) {
+    const r = this.renderer;
+    const [x, y, w, h] = rect;
+    r.setRenderTarget(null);
+    r.setScissorTest(true);
+    r.setViewport(x, y, w, h);
+    r.setScissor(x, y, w, h);
+    r.autoClear = false;
+    r.clear();
+    r.render(scene, camera);
+    r.autoClear = true;
+    r.setScissorTest(false);
+    const size = r.getSize(this._size ?? (this._size = new THREE.Vector2()));
+    r.setViewport(0, 0, size.x, size.y);
   }
 }

@@ -12,6 +12,14 @@ const log = (...m) => console.log('[smoke]', ...m);
 try {
   await page.goto(`${server.url}?autopilot=1&seed=${seed}&mute=1&fast=${a.fast ?? 2}${a.query ?? ''}`);
   await page.waitForFunction(() => window.__nanoni?.state().phase === 'race', null, { timeout: 30000 });
+  // Modifier の定義に食い違いがないか（存在しない相手・文末が「のに。」でない など）
+  const problems = await page.evaluate(() => window.__nanoni.modifiers.problems());
+  const count = await page.evaluate(() => window.__nanoni.modifiers.list().length);
+  log(`modifiers registered: ${count}`);
+  if (problems.length) {
+    ok = false;
+    log('FAIL: modifier registry', problems);
+  }
   const first = await state(page);
   const t0 = Date.now();
   let last = first;

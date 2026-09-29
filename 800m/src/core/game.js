@@ -24,6 +24,13 @@ import { CameraRig } from '../camera/cameraRig.js';
 import { PostProcessing } from '../fx/postProcessing.js';
 import { GLOBAL_UNIFORMS } from '../fx/materialPatch.js';
 import { createPresentation, resetPresentation } from '../modifiers/presentation.js';
+import { REGISTRY, validateRegistry } from '../modifiers/library/index.js';
+import { ModifierManager } from '../modifiers/modifierManager.js';
+import { ChaosDirector, FINALE } from '../modifiers/chaosDirector.js';
+import { NanoniVoice } from '../modifiers/nanoni.js';
+import { TvDirector } from '../camera/tvDirector.js';
+import { Floors } from '../stadium/floors.js';
+import { Weather } from '../fx/weather.js';
 import { Hud } from '../ui/hud.js';
 
 // Game: 組み立てと配線だけの薄い層。
@@ -65,10 +72,13 @@ export class Game {
 
     this.deform = new WorldDeform();
     this.lighting = new Lighting(this.scene);
+    // stadium = スタンド・照明・観客（「競技場が消える」で隠す）。トラックは別（いつも見える）
     this.stadium = new THREE.Group();
     this.scene.add(this.stadium);
     this.track = buildTrack(this.deform);
-    this.stadium.add(this.track);
+    this.scene.add(this.track);
+    this.floors = new Floors(this.scene);
+    this.weather = new Weather(this.scene);
     this.stands = buildStands(this.deform, this.quality.standRows);
     this.stadium.add(this.stands);
     this.props = buildProps(this.deform, this.stands.userData.top);
@@ -83,6 +93,21 @@ export class Game {
     this.hud = new Hud();
     this.input = new Input($('#ui'));
     this.clock = new Clock({ fast: this.params.fast });
+
+    // Modifier（Presentation だけを書く）と演出家
+    this.mods = new ModifierManager(this.bus);
+    this.chaos = new ChaosDirector(this.bus, this.mods);
+    this.voice = new NanoniVoice(this.bus, this.hud, () => ({
+      d: this.core.player.d,
+      running: this.phase === 'race' && this.core.running,
+      finale: this.core.player.d >= FINALE.clear || this.core.player.finished,
+      manager: this.mods,
+    }));
+    this.tv = new TvDirector();
+    this.activeModifierIds = () => this.mods.ids;
+    this.raceHistory = () => this.mods.history.map((h) => ({ ...h, label: `${h.name}（${h.d}m）` }));
+    const problems = validateRegistry();
+    if (problems.length) console.warn('[modifiers]', problems);
 
     this.wire();
     this.resize();
@@ -172,6 +197,13 @@ export class Game {
     this.core.runners.forEach((r, i) => (r.talent = this.bots[i]?.talent ?? 1));
     this.runners.reset();
     this.cheerSys.reset();
+    this.mods.reset();
+    this.chaos.reset(this.bank, this.params);
+    if (this.chaos.unknown?.length) console.warn('[modifiers] unknown:', this.chaos.unknown);
+    this.voice.reset();
+    this.tv.reset(this.bank, this.core);
+    this.cameraSubject = -1;
+    this.lastCamLabel = '';
     this.finishRealTime = null;
     this.raceEndTime = null;
     this.phase = 'title';
@@ -195,6 +227,7 @@ export class Game {
       this.core.state = RACE_STATE.RUNNING;
       this.bus.emit(EV.RACE_START, { startDistance: this.params.distance });
     } else this.core.begin(rng.range(0.9, 1.5));
+    this.chaos.begin(this.params.distance);
     this.raceStartReal = this.clock.realTime;
   }
 
@@ -214,7 +247,9 @@ export class Game {
         const inp = this.input;
         const ax = inp.effortAxis;
         const effort = PHYS.effort.normal + (ax > 0 ? ax * (PHYS.effort.push - PHYS.effort.normal) : ax * (PHYS.effort.normal - PHYS.effort.conserve));
-        return { effort, burst: inp.held('burst'), lateral: inp.lateralAxis, step: inp.pressed('step') };
+        // 左右反転の画面では、操作も画面に合わせる（右を押せば画面の右へ）
+        const mirror = this.P.post.flipX > 0.5 ? -1 : 1;
+        return { effort, burst: inp.held('burst'), lateral: inp.lateralAxis * mirror, step: inp.pressed('step') };
       }
       return this.bots[i].intent(core, r, env);
     });
@@ -233,19 +268,48 @@ export class Game {
     const { core } = this;
     this.handleGlobalInput();
     const steps = this.paused ? 0 : this.clock.tick(now, this.P.time.sim);
-    for (let i = 0; i < steps; i++) {
-      core.step(STEP, this.intents(), { cheer: this.cheer });
-      this.bus.time = core.time;
-      this.input.endFrameStep?.();
-    }
+    for (let i = 0; i < steps; i++) this.stepRace();
     const dt = this.clock.realDt;
     this.updatePresentation(dt);
     this.updateView(dt);
     this.renderer.info.reset();
-    this.post.render(this.P.camera.split4 ? this.split4Cameras() : null);
+    this.post.render(this.P.camera.split4 ? this.split4Cameras(dt) : null, this.P.ui.pip && this.phase === 'race' ? this.pipView(dt) : null);
     this.trackFps(dt);
     this.input.endFrame();
     this.checkEnd();
+  }
+
+  // 1/60 秒の固定ステップ: レース → 観客の盛り上がり → 演出家 → Modifier の寿命 → 中継の被写体
+  // （ここにあるものはすべて決定的: 同じ seed + 同じ入力なら同じレース・同じ演出）
+  stepRace() {
+    const core = this.core;
+    // タイトル画面の間は進めない（待ち時間の長さで乱数の消費がずれると、同じ seed でも別のレースになる）
+    if (this.phase === 'title') return;
+    core.step(STEP, this.intents(), { cheer: this.cheer });
+    this.bus.time = core.time;
+    this.input.endFrameStep?.();
+    this.cheerSys.update(STEP, core);
+    const ctx = this.modCtx();
+    this.chaos.step(STEP, ctx);
+    this.mods.step(STEP, ctx);
+    this.chaosLevel = this.chaos.level;
+    if (core.running) this.tv.step(STEP, core);
+    this.directorPick = this.tv.pick;
+    // ボットの CAMERA 性格: 中継カメラに映っている選手は張り切る
+    const camMod = this.mods.running.find((i) => i.def.category === 'CAMERA' || i.def.category === 'GENRE');
+    this.cameraSubject = camMod && (camMod.id === 'tvBroadcast' || camMod.id === 'directorCam') ? (camMod.id === 'directorCam' ? this.tv.pick : core.playerIndex) : -1;
+  }
+
+  modCtx() {
+    const p = this.core.player;
+    return {
+      core: this.core,
+      hud: this.hud,
+      bus: this.bus,
+      d: p.d,
+      time: this.clock.realTime,
+      playerPhase: p.phase,
+    };
   }
 
   handleGlobalInput() {
@@ -262,11 +326,14 @@ export class Game {
     }
   }
 
-  // Presentation を作り直す（Phase 3 で ModifierManager / ChaosDirector がここに入る）
+  // Presentation を作り直す: defaults → Modifier（カテゴリ順に重ね書き）→ ラストの決まりごと → カメラの上書き
   updatePresentation(dt) {
     const P = resetPresentation(this.P);
     const core = this.core;
     const p = core.player;
+    if (this.phase !== 'title') this.mods.apply(P, this.modCtx());
+    this.finale(P, p);
+    this.modifierHook?.(P, dt);
     // フィニッシュ前後: 写真判定カメラ + スロー
     if (p.finished && this.finishRealTime !== null) {
       const since = this.clock.realTime - this.finishRealTime;
@@ -277,7 +344,23 @@ export class Game {
     } else if (this.params.camera) {
       P.camera.mode = this.params.camera; // ?camera=tv など
     }
-    this.modifierHook?.(P, dt);
+  }
+
+  // ラスト 40m: 760m で Modifier が片付き（ChaosDirector）、770m 画面は普通、780m UI は最小、790m 音楽が消える。
+  // 最後に残るのは足音・呼吸・歓声（audio が P.audio.music / focus を読む）
+  finale(P, p) {
+    const d = p.finished ? 800 : p.d;
+    if (d >= FINALE.normalScreen && !this.mods.running.some((i) => i.def.finale)) {
+      // 念のため: 残っている見た目のゆがみを消す（Modifier はもうフェードアウト済み）
+      P.post.pixel = 0;
+      P.post.palette = 0;
+      P.post.lowFps = 0;
+      P.post.flipX = 0;
+      P.time.sim = Math.min(P.time.sim, 1);
+    }
+    if (d >= FINALE.simpleUi && !p.finished) P.ui.skin = 'minimal';
+    if (d >= FINALE.musicFade) P.audio.music = clamp(1 - (d - FINALE.musicFade) / 6, 0, 1);
+    P.audio.focus = clamp((d - FINALE.clear) / 30, 0, 1);
   }
 
   updateView(dt) {
@@ -302,15 +385,20 @@ export class Game {
     SPECTATOR_UNIFORMS.uWave.value = P.crowd.wave;
     SPECTATOR_UNIFORMS.uWaveP.value = CROWD_UNIFORMS.uWaveP.value;
     this.crowd.update(dt, P.crowd, p.d);
-    this.cheerSys.update(dt, core);
-    this.stadium.visible = P.world.stadium > 0.5;
+    const stadiumOn = P.world.stadium > 0.5;
+    this.stadium.visible = stadiumOn;
+    this.track.userData.ground.visible = stadiumOn && !P.world.floor;
+    this.floors.update(dt, P.world.floor, this.camera, this.lighting.fog.color);
+    this.weather.update(dt, this.camera, P.world.weather, P.world.weatherAmt, P.world.wind, innerHeight * Math.min(devicePixelRatio, this.quality.pixelRatio));
+    document.body.classList.toggle('rec', !!P.ui.rec);
+    document.body.classList.toggle('pip', !!P.ui.pip && this.phase === 'race');
+    document.body.classList.toggle('split4', !!P.camera.split4 && this.phase === 'race');
 
     const raceState = core.state === RACE_STATE.MARKS ? 'marks' : core.state === RACE_STATE.SET ? 'set' : 'run';
     this.runners.update(dt, core, P, raceState, this.camera, this.resolveTarget(P.camera.target));
 
     // カメラ
     const subjectIndex = this.resolveTarget(P.camera.target);
-    this.cameraSubject = P.camera.mode === 'TV' ? subjectIndex : -1;
     this.rig.update(
       dt,
       {
@@ -320,9 +408,15 @@ export class Game {
         roll: P.camera.roll,
         shake: Math.max(P.camera.shake, this.shake ?? 0),
         fovMul: P.camera.fovMul,
+        lowAngle: P.camera.lowAngle,
       },
       { onCut: (label) => this.hud.camLabel(label) }
     );
+    if (P.camera.label !== this.lastCamLabel) {
+      if (P.camera.label) this.hud.camLabel(P.camera.label, 3200);
+      this.lastCamLabel = P.camera.label;
+    }
+    this.voice.update(dt);
     this.shake = Math.max(0, (this.shake ?? 0) - dt);
     this.post.update(dt, P.post);
 
@@ -368,8 +462,38 @@ export class Game {
     return core.playerIndex;
   }
 
-  split4Cameras() {
-    return null;
+  // 4 分割: 追従 / 中継 / 真上 / 正面 を同時に
+  split4Cameras(dt) {
+    if (!this.splitRigs) {
+      this.splitRigs = ['TV', 'TOP', 'FRONT'].map((mode) => {
+        const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 3000);
+        return { mode, cam, rig: new CameraRig(cam) };
+      });
+    }
+    const core = this.core;
+    const i = core.playerIndex;
+    const subject = { view: this.runners.views[i], r: core.runners[i] };
+    const aspect = innerWidth / innerHeight;
+    for (const s of this.splitRigs) {
+      s.cam.aspect = aspect;
+      s.rig.update(dt, { mode: s.mode, subject, fovMul: 1 }, {});
+    }
+    return [this.camera, ...this.splitRigs.map((s) => s.cam)];
+  }
+
+  // 違うカメラの時の小窓（右下）: 自分の追従カメラ
+  pipView(dt) {
+    if (!this.pip) {
+      const cam = new THREE.PerspectiveCamera(55, 16 / 9, 0.1, 3000);
+      this.pip = { cam, rig: new CameraRig(cam) };
+    }
+    const core = this.core;
+    const i = core.playerIndex;
+    const w = Math.round(Math.min(300, innerWidth * 0.34));
+    const h = Math.round((w * 9) / 16);
+    this.pip.cam.aspect = w / h;
+    this.pip.rig.update(dt, { mode: 'FOLLOW', subject: { view: this.runners.views[i], r: core.runners[i] }, fovMul: 1 }, {});
+    return { scene: this.scene, camera: this.pip.cam, rect: [innerWidth - w - 16, 92, w, h] };
   }
 
   checkEnd() {
@@ -397,9 +521,10 @@ export class Game {
       })
       .join('');
     $('[data-results]').innerHTML = rows;
-    $('[data-had]').innerHTML = (this.lastResult.had.length ? this.lastResult.had : [{ label: '（何も起きなかった…なのに。）' }])
-      .map((h) => `<li class="${h.legendary ? 'legend' : ''}">${h.label}</li>`)
-      .join('');
+    const had = this.lastResult.had.length ? this.lastResult.had.slice() : [{ label: '（何も起きなかった…なのに。）' }];
+    if (this.mods.maxCombo >= 2) had.push({ label: `最大なのにCOMBO ×${this.mods.maxCombo}`, combo: true });
+    this.lastResult.maxCombo = this.mods.maxCombo;
+    $('[data-had]').innerHTML = had.map((h) => `<li class="${h.legendary ? 'legend' : ''}${h.combo ? ' combo' : ''}">${h.legendary ? '★ ' : ''}${h.label}</li>`).join('');
     $('[data-v="seed"]').textContent = this.seed;
     $('#result').classList.remove('hidden');
     this.bus.emit('RESULT_SHOWN', { seed: this.seed });
@@ -420,6 +545,8 @@ export class Game {
     else if (a === 'step') this.clock.stepOnce = true;
     else if (a === 'autopilot') this.autopilot = !this.autopilot;
     else if (a === 'restart') this.restart(this.seed);
+    else if (a === 'next') this.chaos.next(core.player.d);
+    else if (a === 'clear') this.mods.clear();
     else this.devHook?.(a);
   }
 
@@ -484,6 +611,17 @@ export class Game {
       },
       start: () => g.startRace(),
       restart: (seed) => g.restart(seed ?? g.seed),
+      // Modifier を直接動かす（ギャラリー撮影・テスト用）
+      modifiers: {
+        list: () => [...REGISTRY.values()].map((d) => ({ id: d.id, category: d.category, name: d.nn.name, legendary: d.legendary, big: d.big })),
+        start: (id, opts = {}) => !!g.mods.start(id, { force: true, source: 'debug', d: g.core.player.d, ...opts }),
+        stop: (id) => g.mods.stop(id),
+        clear: (instant = true) => g.mods.clear({ instant }),
+        active: () => g.mods.ids,
+        history: () => g.mods.history,
+        legend: () => g.chaos.legend?.id ?? null,
+        problems: () => validateRegistry(),
+      },
     };
   }
 }

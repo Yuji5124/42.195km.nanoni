@@ -62,9 +62,18 @@ export class CameraRig {
       case 'FOLLOW':
       default: {
         const k = Math.max(1, scale * 0.8);
-        o.pos.copy(P).addScaledVector(h, -5.8 * k).addScaledVector(up, 2.9 * k);
-        o.look.copy(P).addScaledVector(h, 7).addScaledVector(up, 0.9 * scale);
+        const low = ctx.lowAngle ?? 0; // レースゲーム風: 低く・近く
+        o.pos.copy(P).addScaledVector(h, lerp(-5.0, -4.0, low) * k).addScaledVector(up, lerp(2.55, 1.05, low) * k);
+        o.look.copy(P).addScaledVector(h, lerp(6.5, 12, low)).addScaledVector(up, lerp(0.95, 1.0, low) * scale);
         o.fov = 60;
+        break;
+      }
+      case 'FOLLOW_CROWD': {
+        // 観客の Modifier 用: 後ろ内側から、主人公とスタンドを一緒に映す
+        const k = Math.max(1, scale * 0.8);
+        o.pos.copy(P).addScaledVector(h, -5.4 * k).addScaledVector(right, -3.2 * k).addScaledVector(up, 2.2 * k);
+        o.look.copy(P).addScaledVector(h, 5).addScaledVector(right, 4.5).addScaledVector(up, 2.4);
+        o.fov = 62;
         break;
       }
       case 'REAR':
@@ -86,8 +95,8 @@ export class CameraRig {
         // 真横 2D: 遠くから超望遠（ほぼ平行投影）
         o.pos.copy(P).addScaledVector(right, -70).addScaledVector(up, 1.3).addScaledVector(h, 3);
         o.look.copy(P).addScaledVector(up, 1.3).addScaledVector(h, 3);
-        o.fov = 7.5;
-        o.near = 55;
+        o.fov = 5.6;
+        o.near = 12; // 手前の芝は映す（地面の帯になる）
         break;
       case 'TV': {
         // メインスタンド側の高い位置から、長いレンズで追う
@@ -105,10 +114,11 @@ export class CameraRig {
         break;
       }
       case 'TOP':
-        o.pos.copy(P).addScaledVector(up, 42).addScaledVector(h, 3);
-        o.look.copy(P).addScaledVector(h, 3);
+        // 真上: 走る向きが画面の上。選手が見える高さ（主人公の足元には目印の輪）
+        o.pos.copy(P).addScaledVector(up, 17 * Math.max(1, scale * 0.7)).addScaledVector(h, 2.5);
+        o.look.copy(P).addScaledVector(h, 2.5);
         o.up.copy(h);
-        o.fov = 45;
+        o.fov = 55;
         break;
       case 'FIRST_PERSON': {
         const hd = sub.view.head;
@@ -210,10 +220,10 @@ export class CameraRig {
     this.sub = want.subject;
     this.modeTime += dt;
     if (this.blend < 1) this.blend = Math.min(1, this.blend + dt / this.blendDur);
-    this.computePose(this.mode, this.b, this.modeTime, this.sub, { ...ctx, fovMul: want.fovMul });
+    this.computePose(this.mode, this.b, this.modeTime, this.sub, { ...ctx, fovMul: want.fovMul, lowAngle: want.lowAngle });
     const out = this.out;
     if (this.blend < 1 && this.prevSub) {
-      this.computePose(this.prevMode, this.a, this.modeTime, this.prevSub, { fovMul: want.fovMul });
+      this.computePose(this.prevMode, this.a, this.modeTime, this.prevSub, { fovMul: want.fovMul, lowAngle: want.lowAngle });
       const t = easeInOut(this.blend);
       out.pos.lerpVectors(this.a.pos, this.b.pos, t);
       out.look.lerpVectors(this.a.look, this.b.look, t);
@@ -228,7 +238,7 @@ export class CameraRig {
       out.near = this.b.near;
     }
     // 追従モードは少しなめらかに（カクつきを消す）
-    if (this.mode === 'FOLLOW' && this.blend >= 1) {
+    if ((this.mode === 'FOLLOW' || this.mode === 'FOLLOW_CROWD') && this.blend >= 1) {
       const f = this.follow;
       if (!f.init || want.cut) {
         f.pos.copy(out.pos);
