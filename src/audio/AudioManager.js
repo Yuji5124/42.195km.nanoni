@@ -437,6 +437,8 @@ export class AudioManager {
   hush(seconds) {
     if (!this.ctx) return;
     this.hushUntil = this.ctx.currentTime + seconds;
+    // 世界が止まっている間は update が呼ばれないので、ここで直接静かにする
+    this.crowdGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.05);
     this.duckMusic(1, seconds);
   }
   // 重力が傾く「ぐぐっ」

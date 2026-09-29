@@ -122,6 +122,9 @@ export class Game {
   // ------------------------------------------------------------------
   buildWorld(modeId) {
     const oldScene = this.scene;
+    // 前のワールドの区間演出が鳴らしていた音を止める
+    this.audio.setEngine?.(false);
+    this.audio.setBreath?.(false);
     const mode = getMode(modeId);
     this.mode = mode;
     this.modeId = mode.id;
@@ -612,6 +615,11 @@ export class Game {
     const p = this.player;
     const rules = this.events.current.rules ?? {};
     const out = { axisX: 0, axisY: p.stamina > 30 ? 1 : 0, dash: p.stamina > 60, jump: false };
+    // ?auto=push: ずっと W（ペースアップ）、1500m はラスト 60m でダッシュ（検証用のもう一つの走り方）
+    if (this.params.get('auto') === 'push') {
+      out.axisY = 1;
+      out.dash = this.mode.id === '1500m' ? this.distance.unitsToKm(p.s) > this.data.goalKm - 0.06 : p.stamina > 60;
+    }
     if (rules.screenControls) {
       out.axisX = 1;
       out.axisY = 0;

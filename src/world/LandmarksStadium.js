@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { Reflector } from 'three/addons/objects/Reflector.js';
 import { CONFIG } from '../config.js';
 import { makeBannerTexture, makeStandCrowdTexture, makeTrackLineTexture, makeCanvas, toTexture, FONT_JP } from './textures.js';
+import { createHumanInstances, applyLook, randomSpectatorLook, writeYawMatrix } from './RunnerModel.js';
+import { createRng } from '../core/math.js';
 
 // 1500m モード用のランドマーク: スタジアム・トラックのライン・ゲート・鏡のゲート・歩道橋。
 // Landmarks.js と同じく「z = 0 が設置地点・前方 = -Z」のローカル座標で組み立てる。
@@ -322,6 +324,24 @@ export const stadiumBuilders = {
     sign.material.color.setScalar(1.3);
     sign.position.set(0, deckY + 0.8, 1.62);
     g.add(sign);
-    return { group: g, deckY, span, crowdSpots: true };
+    // 歩道橋の上の観客（沿道と同じ人型・同じ盛り上がりのシェーダー）
+    if (ctx.crowdMaterial) {
+      const n = 34;
+      const people = createHumanInstances(n, ctx.crowdMaterial, 'low');
+      const rng = createRng(Math.round(lm.km * 1000));
+      const arr = people.instanceMatrix.array;
+      for (let i = 0; i < n; i++) {
+        const row = i % 2;
+        const x = -span / 2 + 1.2 + (i / n) * (span - 2.4) + rng.range(-0.2, 0.2);
+        // ランナーが来る側（+z）を向いて手すりに並ぶ
+        writeYawMatrix(arr, i, x, deckY + 0.25, 0.9 - row * 0.9, Math.PI + rng.range(-0.4, 0.4), rng.range(0.92, 1.05));
+        applyLook(people, i, randomSpectatorLook(rng));
+        people.geometry.attributes.iAnim.setXY(i, rng.next(), 1);
+      }
+      people.instanceMatrix.needsUpdate = true;
+      people.frustumCulled = false;
+      g.add(people);
+    }
+    return { group: g, deckY, span };
   },
 };

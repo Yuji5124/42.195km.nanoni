@@ -643,6 +643,7 @@ body {
   font-size: clamp(80px, 18vw, 200px);
   color: #fff;
   text-shadow: 0 0 30px var(--cyan), 6px 6px 0 var(--pink);
+  white-space: nowrap;
   opacity: 0;
 }
 .countdown.show {

@@ -263,7 +263,7 @@ export class UIManager {
   countdown(text) {
     const c = this.el.countdown;
     c.textContent = text;
-    c.classList.toggle('long', [...(text ?? '')].length > 3);
+    c.classList.toggle('long', [...(text ?? '')].length >= 3);
     c.classList.remove('show');
     void c.offsetWidth;
     if (text) c.classList.add('show');

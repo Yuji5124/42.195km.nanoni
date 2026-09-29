@@ -35,7 +35,7 @@ export class DistanceManager {
 
   // 巡航時に displayCruiseKmh と表示されるよう、レース時計は一定倍率で進める。
   // 42.195km: 16u/s × 1.5 = 24m/s（ゲーム内） ÷ 5.56m/s（20km/h） ≒ 4.32 倍
-  // 1500m:    16u/s × 0.3 = 4.8m/s ÷ 6.67m/s（24km/h） = 0.72 倍
+  // 1500m:    16u/s × 0.28 = 4.48m/s ÷ 6.11m/s（22km/h） ≒ 0.73 倍
   get timeScale() {
     const gameMps = CONFIG.player.cruise * this.metersPerUnit;
     return gameMps / (this.displayCruiseKmh / 3.6);

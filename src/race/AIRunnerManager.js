@@ -118,6 +118,7 @@ export class AIRunnerManager {
     this.sortOrder();
     this.rng = rng;
     this.time = 0;
+    this.playerAvgSpeed = undefined;
   }
 
   sortOrder() {
@@ -172,6 +173,9 @@ export class AIRunnerManager {
     const o = this.order;
     this.sortOrder();
     let packCenter = 0;
+    // プレイヤーのならした速さ（CPU がダッシュの瞬間にだけ反応しないように）
+    this.playerAvgSpeed = damp(this.playerAvgSpeed ?? player.speed, player.speed, 0.35, dt);
+    ctx.playerAvgSpeed = this.playerAvgSpeed;
     if (this.pacer) {
       for (let i = 0; i < this.n; i++) packCenter += s[i];
       packCenter /= this.n;

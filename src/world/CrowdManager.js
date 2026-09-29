@@ -55,6 +55,7 @@ export class CrowdManager {
     this.count = this.perLane * LANES.length;
 
     this.material = createHumanMaterial({ mode: 'spectator', rim: 0.08, rimColor: 0xff7ad9 });
+    this.material.userData.shared = true; // 歩道橋の観客も使う（ランドマークの破棄で消さない）
     this.mesh = createHumanInstances(this.count, this.material, 'low');
     this.scene.add(this.mesh);
 

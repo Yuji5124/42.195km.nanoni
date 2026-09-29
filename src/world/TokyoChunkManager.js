@@ -97,6 +97,18 @@ function createBuildingMaterial() {
             }
           }
           totalEmissiveRadiance += wcol * inWin * lit * 0.75 * uWindowBoost * (1.0 + uCrowdWin * 0.5) * (1.0 - sil * 0.92);
+          // 屋上の手すりに並ぶ観客（壁の最上部に頭と肩のシルエット、ぴょこぴょこ跳ねる）
+          if (uCrowdWin > 0.01) {
+            float top = vBScale.y - v;
+            float cell = floor(u / 0.75);
+            float hop = max(0.0, sin(uTime * 8.0 + cell * 2.3)) * 0.25;
+            float cx = fract(u / 0.75) - 0.5;
+            float headR = length(vec2(cx * 0.75, top - 0.62 + hop) * vec2(1.0, 1.1));
+            float person = max(step(headR, 0.17), step(abs(cx), 0.26) * step(top, 0.52 + hop) * step(0.0, top));
+            float rp = person * step(bhash(vec2(cell, vParams.x * 9.0)), uCrowdWin * 0.9) * step(top, 1.2);
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.015), rp);
+            totalEmissiveRadiance *= 1.0 - rp * 0.95;
+          }
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.04, 0.07), inWin * (1.0 - lit));
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.01), sil);
           // 1 階の店舗の明かり

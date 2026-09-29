@@ -151,6 +151,8 @@ const HANDLERS = {
   racing: {
     enter(S) {
       S.g.audio.setEngine?.(true);
+      // 車のように走るのは人間だけ（本物の車は出さない）
+      S.g.course.removeType('car');
     },
     update(S) {
       S.g.audio.engine?.(S.g.player.speed);
@@ -405,6 +407,7 @@ export class Sections1500 {
     this.photo = false;
     this.finishT = 0;
     this.finishCam = false;
+    this.breathOff = false;
     this.lapNo = 0;
     this.comebackFrom = null;
     this.closeT = 0;
@@ -549,6 +552,11 @@ export class Sections1500 {
     this.finishT += dt;
     const g = this.g;
     // 写真判定の静止画 → いつものゴール映像へ
+    // 息づかいはゴール後しばらくで落ち着く
+    if (this.finishT > 3.5 && !this.breathOff) {
+      this.breathOff = true;
+      g.audio.setBreath?.(false);
+    }
     if (this.finishT > 0.9 && !this.finishCam) {
       this.finishCam = true;
       g.fx.setPreset('goal');

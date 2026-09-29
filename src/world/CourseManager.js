@@ -515,6 +515,11 @@ export class CourseManager {
     return best ? { s: best.s, x: best.x, halfW: best.def.halfW, jumpable: best.def.jumpable } : null;
   }
 
+  // 区間の入口で特定の種類を片付ける（例: レースゲーム区間には本物の車を出さない）
+  removeType(type) {
+    this.items = this.items.filter((it) => it.type !== type);
+  }
+
   // 最終直線などで前方の障害物を片付ける
   clearAhead(fromS) {
     this.items = this.items.filter((it) => it.s < fromS);

@@ -10,12 +10,14 @@ import { clamp, lerp, smoothstep } from '../core/math.js';
 //   1450m 〜     ラストスパート（着順はプレイヤーの走り次第）
 
 // pace: [集団, 分裂, 入れ替わり, スパート]（単位/秒。プレイヤーの巡航 = 16, ペースアップ = 18.5, ダッシュ = 24）
-// 平均的なプレイヤー（ペースアップ中心 ≒ 17.2 + 声援ボーナス）が集団の中にいる強さ
+// ずっと W（ペースアップ 18.5 + 声援ボーナス）で集団の前の方、巡航だけだと集団の後ろ。
+// 勝負はラスト 150m のスタミナ（ダッシュ）の使い方で決まる
+// late: 1350〜1450m で「プレイヤーとの差をどこに収めたいか」（+ = 前）
 export const ARCHETYPES = {
-  start: { label: '逃げ', pace: [17.3, 17.6, 16.2, 18.6] },
-  middle: { label: '先行', pace: [17.1, 17.0, 17.6, 19.8] },
-  closer: { label: '追込', pace: [16.9, 16.4, 17.4, 20.6] },
-  steady: { label: 'イーブン', pace: [17.1, 17.0, 17.0, 19.2] },
+  start: { label: '逃げ', pace: [18.5, 18.9, 17.5, 19.3], late: 4 },
+  middle: { label: '先行', pace: [18.3, 18.3, 18.9, 20.4], late: 3 },
+  closer: { label: '追込', pace: [18.1, 17.7, 18.7, 21.2], late: -4 },
+  steady: { label: 'イーブン', pace: [18.3, 18.3, 18.3, 19.9], late: 0 },
 };
 
 // index 0 はライバルの忍者（AIRunnerManager がプレイヤーの近くをキープさせる）
@@ -107,14 +109,22 @@ export class MiddleDistancePacer {
 
     // プレイヤーと離れすぎない（画面に誰もいない時間を作らない）
     const gap = s - ctx.player.s;
-    if (gap > 35) v -= Math.min(1.8, (gap - 35) * 0.04);
-    else if (gap < -35) v += Math.min(2.0, (-gap - 35) * 0.045);
+    if (gap > 30) v -= Math.min(2.6, (gap - 30) * 0.06);
+    else if (gap < -35) v += Math.min(2.5, (-gap - 35) * 0.05);
     // ライバル（忍者）は脚質どおりに走りつつ、プレイヤーの近くに寄ってくる
     if (FIELD[i]?.rival) v += clamp((2.5 - gap) * 0.12, -1.2, 1.2);
 
-    // 1350m〜: 差が詰まる / 1450m〜: 接戦のスプリント
-    if (f >= 0.9 && f < 0.967) v += clamp(-gap * 0.06, -1.8, 2.4);
-    else if (f >= 0.967) v += clamp(-gap * 0.03, -1.0, 1.0);
+    // 1350m〜: 差が詰まる。プレイヤーの「平均の速さ」（ダッシュの瞬間は追わない）に寄せ、
+    // 脚質ごとの位置（逃げ・先行は少し前、追込は少し後ろ）へ集まってくる
+    const pAvg = ctx.playerAvgSpeed ?? ctx.player.speed;
+    if (f >= 0.9 && f < 0.967) {
+      const want = this.type[i].late + this.talent[i] * 6;
+      const w = smoothstep(0.9, 0.925, f);
+      v = v * (1 - w * 0.85) + (pAvg + clamp((want - gap) * 0.14, -4, 3)) * w * 0.85;
+    } else if (f >= 0.967) {
+      // 1450m〜: ラストスパート。ここからはプレイヤーの走り（スタミナの残し方）で決まる
+      v += clamp(-gap * 0.04, -1.2, 1.2);
+    }
     return v;
   }
 }

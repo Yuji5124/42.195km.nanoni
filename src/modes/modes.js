@@ -27,9 +27,10 @@ export const RACE_MODES = {
     id: '1500m',
     title: ['1500m、', 'なのに。'],
     data: m1500Data,
-    // 1500m ≒ 5000 単位。巡航で約 5 分、全部のジャンルを通り抜ける
-    metersPerUnit: 0.3,
-    displayCruiseKmh: 24,
+    // 1500m ≒ 5360 単位。ペースアップで約 4.8 分・巡航で約 5.6 分、全部のジャンルを通り抜ける
+    // 時計は「ずっとペースアップ ≒ 3 分 30 秒前後」。世界記録（3:26.00）はダッシュを上手に使えば届く
+    metersPerUnit: 0.28,
+    displayCruiseKmh: 22,
     fullKm: 1.5,
     distUnit: 'm',
     timeFormat: 'ms',

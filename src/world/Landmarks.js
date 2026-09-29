@@ -462,7 +462,7 @@ export function disposeObject(obj) {
     if (o.material) {
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) {
-        if (m === steel || m === darkSteel) continue;
+        if (m === steel || m === darkSteel || m.userData?.shared) continue;
         if (m.map) m.map.dispose();
         m.dispose();
       }
