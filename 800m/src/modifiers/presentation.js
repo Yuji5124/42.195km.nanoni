@@ -72,7 +72,7 @@ export const DEFAULTS = {
     stickOthers: false,
     playerOpacity: 1,
     otherOpacity: 1,
-    playerRim: 0.45,
+    playerRim: 0.25,
     playerAnimSpeed: 1,
     otherAnimSpeed: 1,
     ghostTrail: 0,

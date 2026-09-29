@@ -15,6 +15,8 @@ import { Bot } from '../runners/bot.js';
 import { RunnerManager } from '../runners/runnerManager.js';
 import { buildTrack } from '../stadium/track.js';
 import { buildStands, CROWD_UNIFORMS } from '../stadium/stands.js';
+import { Crowd, SPECTATOR_UNIFORMS } from '../stadium/crowd.js';
+import { CrowdEnergy } from '../stadium/cheer.js';
 import { buildProps } from '../stadium/props.js';
 import { Lighting } from '../stadium/lighting.js';
 import { WorldDeform } from '../stadium/worldDeform.js';
@@ -45,7 +47,10 @@ export class Game {
     this.fpsAcc = 0;
     this.fpsFrames = 0;
     this.fpsHistory = [];
-    this.cheer = 20;
+  }
+
+  get cheer() {
+    return this.cheerSys?.value ?? 20;
   }
 
   async init() {
@@ -68,6 +73,8 @@ export class Game {
     this.stadium.add(this.stands);
     this.props = buildProps(this.deform, this.stands.userData.top);
     this.stadium.add(this.props.group);
+    this.crowd = new Crowd(this.stadium, this.deform, this.quality.crowd, new SeedBank(800).stream('crowd'));
+    this.cheerSys = new CrowdEnergy(this.bus);
 
     this.core = new RaceCore(RUNNERS, this.bus);
     this.runners = new RunnerManager(this.scene, RUNNERS, this.deform);
@@ -115,7 +122,6 @@ export class Game {
       this.shake = 0.3;
     });
     bus.on(EV.RHYTHM, ({ grade }) => hud.step(grade));
-    bus.on(EV.PLAYER_OVERTAKE, () => (this.cheer = clamp(this.cheer + 6, 0, 100)));
     bus.on(EV.FINISH, () => {
       this.finishRealTime = this.clock.realTime;
       this.post.flashOnce(0.5);
@@ -165,7 +171,7 @@ export class Game {
     // 同じ性格でも、その日の調子は seed で少し違う
     this.core.runners.forEach((r, i) => (r.talent = this.bots[i]?.talent ?? 1));
     this.runners.reset();
-    this.cheer = 20;
+    this.cheerSys.reset();
     this.finishRealTime = null;
     this.raceEndTime = null;
     this.phase = 'title';
@@ -268,8 +274,8 @@ export class Game {
       P.time.sim = since < 1.2 ? 0.3 : 1;
     } else if (core.state === RACE_STATE.MARKS || core.state === RACE_STATE.SET || this.phase === 'title') {
       P.camera.mode = 'START';
-    } else if (p.d > 780 && p.d < 800) {
-      P.camera.mode = 'FOLLOW';
+    } else if (this.params.camera) {
+      P.camera.mode = this.params.camera; // ?camera=tv など
     }
     this.modifierHook?.(P, dt);
   }
@@ -289,6 +295,14 @@ export class Game {
     CROWD_UNIFORMS.uFreeze.value = P.crowd.freeze;
     CROWD_UNIFORMS.uVanish.value = P.crowd.vanish;
     CROWD_UNIFORMS.uSync.value = P.crowd.sync;
+    SPECTATOR_UNIFORMS.uTime.value = CROWD_UNIFORMS.uTime.value;
+    SPECTATOR_UNIFORMS.uEnergy.value = CROWD_UNIFORMS.uEnergy.value;
+    SPECTATOR_UNIFORMS.uFreeze.value = P.crowd.freeze;
+    SPECTATOR_UNIFORMS.uSync.value = P.crowd.sync;
+    SPECTATOR_UNIFORMS.uWave.value = P.crowd.wave;
+    SPECTATOR_UNIFORMS.uWaveP.value = CROWD_UNIFORMS.uWaveP.value;
+    this.crowd.update(dt, P.crowd, p.d);
+    this.cheerSys.update(dt, core);
     this.stadium.visible = P.world.stadium > 0.5;
 
     const raceState = core.state === RACE_STATE.MARKS ? 'marks' : core.state === RACE_STATE.SET ? 'set' : 'run';
@@ -343,7 +357,6 @@ export class Game {
       this.props.mirrored = P.ui.boardMirror;
       this.props.draw({ time: core.time, lap: `LAP ${p.d >= 400 ? 2 : 1} / 2`, leader: `1. ${leaderDef.en}` });
     }
-    this.cheer = clamp(this.cheer - dt * 1.5 + (p.bursting ? dt * 6 : 0), 0, 100);
   }
 
   resolveTarget(t) {

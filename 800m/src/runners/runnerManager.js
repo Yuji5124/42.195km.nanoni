@@ -9,8 +9,9 @@ import { clamp } from '../core/mathx.js';
 // 12 人の見た目。RaceCore の値を読んで置くだけ（書き換えない）。
 // 見た目の変形（巨大化・頭だけ巨大・棒人間・透明・世界の変形）は Presentation（P.runner）から受け取る。
 
-function makeMaterial({ rim = 0, rimColor = 0x39e6ff, transparent = false } = {}) {
-  const m = new THREE.MeshLambertMaterial({ vertexColors: true, transparent, depthWrite: !transparent });
+// 普段は不透明（depthWrite あり）。透明にする時だけ setOpacity で切り替える（シェーダーは同じ）
+function makeMaterial({ rim = 0, rimColor = 0x39e6ff } = {}) {
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
   const uniforms = { uRim: { value: rim }, uRimColor: { value: new THREE.Color(rimColor) }, uOpacity: { value: 1 } };
   m.userData.uniforms = uniforms;
   m.onBeforeCompile = (shader) => {
@@ -28,8 +29,14 @@ function makeMaterial({ rim = 0, rimColor = 0x39e6ff, transparent = false } = {}
       )
       .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.a *= uOpacity;');
   };
-  m.customProgramCacheKey = () => `runner-${transparent}`;
+  m.customProgramCacheKey = () => 'runner-800';
   return patchMaterial(m);
+}
+
+function setOpacity(m, a) {
+  m.userData.uniforms.uOpacity.value = a;
+  // 自分の体の前後関係が崩れないよう、深度は書いたまま半透明にする
+  m.transparent = a < 0.999;
 }
 
 const _v = new THREE.Vector3();
@@ -45,11 +52,11 @@ export class RunnerManager {
   constructor(scene, defs, deform) {
     this.scene = scene;
     this.deform = deform;
-    this.playerMat = makeMaterial({ rim: 0.45, rimColor: 0x39e6ff, transparent: true });
-    this.otherMat = makeMaterial({ rim: 0.12, rimColor: 0x7a5cff, transparent: true });
+    this.playerMat = makeMaterial({ rim: 0.25, rimColor: 0x7fe8ff });
+    this.otherMat = makeMaterial({ rim: 0.12, rimColor: 0x7a5cff });
     // カメラと主人公の間に入った選手は透かす（主役が見えなくならないように）
-    this.fadeMat = makeMaterial({ rim: 0.12, rimColor: 0x7a5cff, transparent: true });
-    this.fadeMat.userData.uniforms.uOpacity.value = 0.28;
+    this.fadeMat = makeMaterial({ rim: 0.12, rimColor: 0x7a5cff });
+    setOpacity(this.fadeMat, 0.3);
     this.stickMat = makeMaterial({ rim: 0.6, rimColor: 0xffffff });
     this.views = defs.map((def, i) => this.createView(def, i));
 
@@ -179,7 +186,6 @@ export class RunnerManager {
       // 頭の位置（カメラ・一人称用）
       view.bones.head.getWorldPosition(view.head);
       view.heading = pt.heading;
-      scale *= 1;
       this._m.compose(_a.copy(view.pos).addScaledVector(_n, 0.03), _q, _b.set(0.9 * scale, 1, 0.9 * scale));
       this.shadows.setMatrixAt(view.index, this._m);
     }
@@ -201,8 +207,8 @@ export class RunnerManager {
       }
     }
     // 透明（「自分だけ透明なのに。」）と他人の残像
-    this.playerMat.userData.uniforms.uOpacity.value = R.playerOpacity;
-    this.otherMat.userData.uniforms.uOpacity.value = R.otherOpacity;
+    setOpacity(this.playerMat, R.playerOpacity);
+    setOpacity(this.otherMat, R.otherOpacity);
     this.playerMat.userData.uniforms.uRim.value = R.playerRim;
   }
 }

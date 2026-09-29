@@ -9,11 +9,11 @@ const SAMURAI = {
   skin: 0xe8b38c,
   hair: 0x16121a,
   kimono: 0xf0ece2,
-  haori: 0x1d2c5e,
+  haori: 0x2c4a9c,
   haoriEdge: 0xc9a040,
   mon: 0xf4efe0,
-  hakama: 0x23232e,
-  armor: 0x2a1f24,
+  hakama: 0x39344a,
+  armor: 0x3e2a31,
   armorRed: 0xa51f2b,
   gold: 0xcaa244,
   steel: 0x8c93a0,
@@ -21,7 +21,7 @@ const SAMURAI = {
   shoe: 0xe8322a,
   sole: 0xf6f6f6,
   saya: 0x101014,
-  tsuka: 0x1b2552,
+  tsuka: 0x22306a,
   eye: 0x120d12,
 };
 

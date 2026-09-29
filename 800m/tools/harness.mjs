@@ -49,8 +49,10 @@ export const state = (page) => page.evaluate(() => window.__nanoni?.state() ?? n
 export function args() {
   const a = {};
   for (const s of process.argv.slice(2)) {
-    const [k, v] = s.replace(/^--/, '').split('=');
-    a[k] = v ?? true;
+    const t = s.replace(/^--/, '');
+    const i = t.indexOf('=');
+    if (i < 0) a[t] = true;
+    else a[t.slice(0, i)] = t.slice(i + 1);
   }
   return a;
 }
