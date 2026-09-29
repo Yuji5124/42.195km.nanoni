@@ -3,7 +3,7 @@ import { CONFIG, MODES } from '../config.js';
 import { EventBus } from './EventBus.js';
 import { Input } from './Input.js';
 import { clamp } from './math.js';
-import slice from '../data/vertical-slice.json';
+import { getMode, MODE_ORDER } from '../modes/modes.js';
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';
 import { RunnerController } from '../race/RunnerController.js';
@@ -24,8 +24,9 @@ import { UIManager } from '../ui/UIManager.js';
 //   RaceManager     … 普通のマラソン（順位・時計・ゴール）
 //   CameraDirector  … 見え方を壊す
 //   EventDirector   … 世界とゲームルールを壊す（距離ベース・データ駆動）
-
-const START = { s: -1 - CONFIG.ai.playerRow * CONFIG.ai.gridRowSpacing, x: 0 };
+//
+// レースモード（42.195km / 1500m）はタイトルで選ぶ。モードが変わったら「ワールド」（シーンと
+// 距離に依存するシステム一式）だけを作り直す。レンダラー・入力・UI・音・ポストエフェクトは共有。
 
 const LINES = {
   fall: ['あーっと！ 転倒！', 'これは痛い！ …いや、立ち上がるか!?'],
@@ -59,6 +60,14 @@ export class Game {
     this.highFiveTimer = 0;
     this.sprintTimer = 0;
     this.resultTimer = 0;
+    this.freeze = 0;
+    let saved = null;
+    try {
+      saved = localStorage.getItem('nanoni.mode');
+    } catch {
+      saved = null;
+    }
+    this.modeId = getMode(this.params.get('mode') ?? saved ?? 'marathon').id;
   }
 
   async init() {
@@ -69,11 +78,59 @@ export class Game {
     renderer.toneMappingExposure = 0.95;
     renderer.info.autoReset = false; // コンポーザーの複数パスをまとめて計測する
     this.renderer = renderer;
+    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
+
+    this.input = new Input(document.getElementById('ui'));
+    this.ui = new UIManager();
+    this.audio = new AudioManager();
+    if (this.params.has('mute')) this.audio.setMuted(true);
+
+    this.buildWorld(this.modeId);
+
+    window.addEventListener('resize', () => this.resize());
+    this.resize();
+    document.getElementById('title').addEventListener('pointerdown', () => this.startRace());
+    document.querySelectorAll('[data-mode]').forEach((card) => {
+      card.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        this.selectMode(card.dataset.mode);
+        this.startRace();
+      });
+    });
+    document.getElementById('result').addEventListener('pointerdown', (e) => {
+      if (e.target.closest('[data-action="title"]')) this.backToTitle();
+      else this.startRace();
+    });
+    document.getElementById('pause').addEventListener('pointerdown', () => this.setPaused(false));
+    // Safari 等はユーザー操作のハンドラ内でないと音が鳴らないため、ここでも起こす
+    const wakeAudio = () => this.audio.init();
+    window.addEventListener('keydown', wakeAudio);
+    window.addEventListener('pointerdown', wakeAudio);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.race.running) this.setPaused(true);
+    });
+
+    if (this.params.has('debug') || this.params.has('auto')) window.__game = this;
+    if (this.params.has('auto')) setTimeout(() => this.startRace(), 300);
+
+    this.last = performance.now();
+    renderer.setAnimationLoop((now) => this.frame(now));
+  }
+
+  // ------------------------------------------------------------------
+  // ワールド（モードごとのシーンとシステム）
+  // ------------------------------------------------------------------
+  buildWorld(modeId) {
+    const oldScene = this.scene;
+    const mode = getMode(modeId);
+    this.mode = mode;
+    this.modeId = mode.id;
+    const data = mode.data;
+    this.data = data;
 
     const scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x2a1846, 70, 460);
     this.scene = scene;
-    this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1500);
     this.buildSky();
 
     this.hemi = new THREE.HemisphereLight(0x9fb4ff, 0x2a1c3a, 1.0);
@@ -89,24 +146,22 @@ export class Game {
     scene.add(this.playerLight);
 
     this.bus = new EventBus();
-    this.input = new Input(document.getElementById('ui'));
-    this.ui = new UIManager();
-    this.distance = new DistanceManager(slice.goalKm);
-    this.events = new EventDirector(slice, this.bus);
-    this.path = new CoursePath(slice.curves, this.distance, { endS: this.distance.goalUnits + 1600 });
-    this.chunks = new TokyoChunkManager(scene, this.distance, slice, this.path);
+    this.distance = new DistanceManager(data.goalKm, mode);
+    this.events = new EventDirector(data, this.bus);
+    this.path = new CoursePath(data.curves, this.distance, { endS: this.distance.goalUnits + 1600 });
+    this.chunks = new TokyoChunkManager(scene, this.distance, data, this.path);
     this.crowd = new CrowdManager(scene, this.distance, this.events, this.path);
+    this.chunks.landmarkCtx.crowdMaterial = this.crowd.material;
     this.course = new CourseManager(scene, this.bus, this.distance, this.events, this.path);
     this.player = new RunnerController(scene, this.bus, this.path);
     this.marker = this.buildMarker();
     scene.add(this.marker);
-    this.ai = new AIRunnerManager(scene, this.bus, this.distance, this.path);
+    this.ai = new AIRunnerManager(scene, this.bus, this.distance, this.path, mode.ai);
     this.race = new RaceManager(this.bus, this.distance, this.ai, this.player);
     this.cheer = new CheerSystem(this.bus);
     this.cameraDirector = new CameraDirector(this.camera, scene, this.bus, this.path);
-    this.fx = new EffectManager(renderer, scene, this.camera, this.path);
-    this.audio = new AudioManager(this.bus);
-    if (this.params.has('mute')) this.audio.setMuted(true);
+    if (!this.fx) this.fx = new EffectManager(this.renderer, scene, this.camera, this.path);
+    else this.fx.setScene(scene, this.path);
     const sfxMap = { signal: 'signalChime' };
     this.gags = new GagDirector(scene, this.path, this.distance, this.chunks, {
       say: (t, force) => this.say(t, force),
@@ -119,29 +174,46 @@ export class Game {
       burst: (s, x, y, color) => this.burstAt({ s, x, y }, color, 26),
     });
 
-    this.ui.setSliceGoal(slice.goalKm, CONFIG.fullMarathonKm);
+    this.sections = mode.createSections?.(this) ?? null;
+
+    this.ui.setRaceMode(mode, this.ai.n + 1);
+    this.lastSkyAmt = undefined;
     this.wire();
     this.resetWorld();
     this.toTitle();
+    if (oldScene) this.disposeScene(oldScene);
+  }
 
-    window.addEventListener('resize', () => this.resize());
-    this.resize();
-    document.getElementById('title').addEventListener('pointerdown', () => this.startRace());
-    document.getElementById('result').addEventListener('pointerdown', () => this.startRace());
-    document.getElementById('pause').addEventListener('pointerdown', () => this.setPaused(false));
-    // Safari 等はユーザー操作のハンドラ内でないと音が鳴らないため、ここでも起こす
-    const wakeAudio = () => this.audio.init();
-    window.addEventListener('keydown', wakeAudio);
-    window.addEventListener('pointerdown', wakeAudio);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.race.running) this.setPaused(true);
+  disposeScene(scene) {
+    const seen = new Set();
+    scene.traverse((o) => {
+      if (o.geometry && !seen.has(o.geometry)) {
+        seen.add(o.geometry);
+        o.geometry.dispose();
+      }
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of mats) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        for (const v of Object.values(m)) if (v?.isTexture && !seen.has(v)) (seen.add(v), v.dispose());
+        m.dispose();
+      }
     });
+    scene.clear();
+  }
 
-    if (this.params.has('debug') || this.params.has('auto')) window.__game = this;
-    if (this.params.has('auto')) setTimeout(() => this.startRace(), 300);
-
-    this.last = performance.now();
-    renderer.setAnimationLoop((now) => this.frame(now));
+  // タイトルでモードを切り替える（ワールドを作り直す）
+  selectMode(id) {
+    const mode = getMode(id);
+    if (mode.id === this.modeId || (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT)) return;
+    try {
+      localStorage.setItem('nanoni.mode', mode.id);
+    } catch {
+      /* 保存できなくても遊べる */
+    }
+    this.ui.hideResult();
+    this.buildWorld(mode.id);
+    this.fx.glitchBurst(0.8);
   }
 
   async loadFonts() {
@@ -262,18 +334,19 @@ export class Game {
     });
 
     bus.on('countdown', ({ n }) => {
-      ui.countdown(String(n));
-      audio.countdown(n);
+      const labels = this.mode.countdown;
+      ui.countdown(labels ? labels[n] ?? '' : String(n));
+      if (!labels || labels[n]) audio.countdown(n);
     });
     bus.on('raceStart', () => {
-      ui.countdown('GO!');
+      ui.countdown(this.mode.countdown?.go ?? 'GO!');
       audio.countdown(0);
       audio.startGun();
       audio.setMusic(this.events.current.music);
       cam.setMode(MODES.NORMAL, { transition: 1.6 });
       fx.flash(0.25);
       ui.hint(this.input.isTouch ? '◀▶ 移動　JUMP ジャンプ　DASH ダッシュ' : '←→ 移動　SPACE ジャンプ　SHIFT ダッシュ　W ペースアップ', 5000);
-      this.say('スタートしました！ 42.195km、なのに…の旅が始まります！', true);
+      this.say(this.mode.lines?.start ?? 'スタートしました！ 42.195km、なのに…の旅が始まります！', true);
       const warp = parseFloat(this.params.get('warp'));
       if (warp > 0) this.warpTo(warp);
     });
@@ -383,6 +456,7 @@ export class Game {
     });
 
     bus.on('cheer', ({ kind, label, amount, combo }) => {
+      if (kind === 'nearMiss' || kind === 'dodge') this.race.stats.nearMiss++;
       // ただの追い抜きは連続するとポップが埋まるので間引く（スコアは全部入る）
       const now = performance.now();
       if (kind !== 'overtake' || now - (this.lastOvertakePop ?? 0) > 700) {
@@ -415,10 +489,12 @@ export class Game {
       audio.goal();
       audio.setMusic('title');
       ui.setTV(false);
-      ui.fever('GOAL!!', 2400);
-      this.say(`侍ランナー、ゴール！ ${position}位でフィニッシュ！ …結局、ちゃんとマラソンでした！`, true);
+      ui.fever(this.mode.goalText ?? 'GOAL!!', 2400);
+      this.say(this.mode.lines?.finish?.(position, this) ?? `侍ランナー、ゴール！ ${position}位でフィニッシュ！ …結局、ちゃんとマラソンでした！`, true);
       this.resultTimer = 4.2;
     });
+
+    this.sections?.wire(bus);
   }
 
   // コース座標 (s, x, y) のアイテム位置でパーティクルを弾けさせる
@@ -435,8 +511,10 @@ export class Game {
 
   // ------------------------------------------------------------------
   resetWorld() {
-    this.player.reset(START.s, START.x);
-    this.ai.reset(START);
+    // 1500m は AI 側がスタートラインの枠を決める（プレイヤーの位置も合わせて調整される）
+    const start = { ...this.mode.startLine };
+    this.ai.reset(start);
+    this.player.reset(start.s, start.x);
     this.course.reset(0);
     this.gags.reset();
     this.chunks.reset();
@@ -446,10 +524,22 @@ export class Game {
     this.fx.reset();
     this.cameraDirector.reset();
     this.distance.reset();
+    this.sections?.reset();
     this.timeScale = 1;
     this.slowMo = 0;
     this.resultTimer = 0;
     this.duelTimer = 0;
+    this.freeze = 0;
+  }
+
+  // リザルト → タイトル（モードを選び直す）
+  backToTitle() {
+    if (this.race.state !== RACE.RESULT) return;
+    this.ui.hideResult();
+    this.audio.setMusic(null);
+    this.resetWorld();
+    this.ui.setTV(false);
+    this.toTitle();
   }
 
   toTitle() {
@@ -483,7 +573,7 @@ export class Game {
     for (let i = 0; i < this.ai.n; i++) this.ai.s[i] += delta;
     this.course.reset(target);
     this.events.skipTo(km);
-    this.distance.raceTime = (km * 1000) / (CONFIG.displayCruiseKmh / 3.6);
+    this.distance.raceTime = (km * 1000) / (this.distance.displayCruiseKmh / 3.6);
     this.cameraDirector.setMode(this.events.current.camera, { cut: true });
   }
 
@@ -496,7 +586,9 @@ export class Game {
     this.race.showResult();
     const st = this.race.stats;
     this.ui.showResult({
-      km: slice.goalKm,
+      mode: this.mode,
+      km: this.data.goalKm,
+      nearMiss: st.nearMiss,
       time: st.finishTime,
       position: st.finishPosition,
       total: this.race.total,
@@ -556,7 +648,10 @@ export class Game {
     const realDt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     this.handleGlobalInput();
-    if (!this.paused) {
+    if (this.freeze > 0) {
+      // 世界が止まる（750m の「まだ半分です。」）。描画は最後のフレームのまま
+      this.freeze -= realDt;
+    } else if (!this.paused) {
       if (this.slowMo > 0) {
         this.slowMo -= realDt;
         this.timeScale = this.slowMo > 0 ? 0.35 : 1;
@@ -572,6 +667,12 @@ export class Game {
   handleGlobalInput() {
     const { input, race } = this;
     if (input.pressed('mute')) this.audio.toggleMute();
+    if (race.state === RACE.TITLE && (input.pressed('left') || input.pressed('right'))) {
+      const i = MODE_ORDER.indexOf(this.modeId);
+      const next = MODE_ORDER[(i + (input.pressed('right') ? 1 : MODE_ORDER.length - 1)) % MODE_ORDER.length];
+      this.selectMode(next);
+    }
+    if (race.state === RACE.RESULT && input.pressed('title')) this.backToTitle();
     if ((race.state === RACE.TITLE || race.state === RACE.RESULT) && (input.pressed('confirm') || input.pressed('retry'))) {
       this.startRace();
     }
@@ -590,7 +691,9 @@ export class Game {
     if (running) events.update(km);
     const state = events.current;
     const patch = running ? this.gags.rulesPatch(player) : null;
-    const rules = patch ? { ...(state.rules ?? {}), ...patch } : state.rules ?? {};
+    const secPatch = running ? this.sections?.rulesPatch(player) : null;
+    let rules = patch ? { ...(state.rules ?? {}), ...patch } : state.rules ?? {};
+    if (secPatch) rules = { ...rules, ...secPatch };
 
     player.update(dt, this.input, {
       canControl: running,
@@ -613,6 +716,7 @@ export class Game {
     // シューティング中の射撃（SPACE / JUMP 長押しで連射）
     const fire = running && !!rules.shooter && (this.autopilot ? true : this.input.held('jump'));
     if (playing) this.gags.update(dt, player, { fire });
+    this.sections?.update(dt, { running, playing, km, state, rules });
     race.update(dt);
 
     // 声援の条件
@@ -629,7 +733,8 @@ export class Game {
     });
 
     this.crowd.update(player.s, dt, cheer.excitement);
-    this.cameraDirector.update(dt, { player, time: this.time, roll: running ? state.roll ?? 0 : 0 });
+    const roll = running ? this.sections?.cameraRoll?.() ?? state.roll ?? 0 : 0;
+    this.cameraDirector.update(dt, { player, time: this.time, roll });
     this.ui.cctvTime(this.distance.raceTime);
     const camMode = this.cameraDirector.mode;
     this.marker.visible = playing && (camMode === MODES.TV_BROADCAST || camMode === MODES.SIDE_2D || camMode === MODES.TOP_DOWN);
@@ -641,14 +746,16 @@ export class Game {
     this.ai.material.userData.uniforms.uNearFade.value = camDist < 14 ? camDist - 1.2 : 0;
     this.chunks.update(player.s, dt, this.cameraDirector.sideBlend);
     const skyAmt = this.chunks.skyAmount(player.s);
-    if (skyAmt !== this.lastSkyAmt) {
-      this.lastSkyAmt = skyAmt;
+    const stadAmt = this.chunks.stadiumAmount(player.s);
+    if (skyAmt + stadAmt * 7 !== this.lastSkyAmt) {
+      this.lastSkyAmt = skyAmt + stadAmt * 7;
       const su = this.sky.material.uniforms;
       su.uTop.value.copy(SKY_NIGHT.top).lerp(SKY_DAY.top, skyAmt);
       su.uMid.value.copy(SKY_NIGHT.mid).lerp(SKY_DAY.mid, skyAmt);
       su.uHorizon.value.copy(SKY_NIGHT.horizon).lerp(SKY_DAY.horizon, skyAmt);
       this.scene.fog.color.copy(SKY_NIGHT.fog).lerp(SKY_DAY.fog, skyAmt);
-      this.hemi.intensity = 1.0 + skyAmt * 0.9;
+      // スタジアムは照明で明るい
+      this.hemi.intensity = 1.0 + skyAmt * 0.9 + stadAmt * 0.55;
     }
     this.fx.update(dt, { player, tier: cheer.tier, excitement: cheer.excitement, playing });
     this.crowd.setPointScale(this.fx.pointScale);
@@ -666,8 +773,8 @@ export class Game {
         total: race.total,
         cheer: cheer.cheer,
         combo: cheer.combo,
-        km: clamp(km, 0, race.state === RACE.RUNNING ? 99 : slice.goalKm),
-        fullKm: CONFIG.fullMarathonKm,
+        km: clamp(km, 0, race.state === RACE.RUNNING ? 99 : this.data.goalKm),
+        fullKm: this.mode.fullKm,
         time: this.distance.raceTime,
         stamina: player.stamina,
         exhausted: player.exhausted,

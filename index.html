@@ -32,7 +32,7 @@
 
         <div class="hud-dist">
           <div class="label">DISTANCE</div>
-          <div class="value"><b id="dist">0.000</b><small> / 42.195 km</small></div>
+          <div class="value"><b id="dist">0.000</b><small id="distTotal"> / 42.195 km</small></div>
           <div class="progress">
             <div id="progMe"></div>
             <div id="progSlice" class="slice-mark" title="VERTICAL SLICE GOAL"></div>
@@ -83,9 +83,20 @@
       <!-- ===== タイトル ===== -->
       <div id="title" class="screen title-screen">
         <div class="title-wrap">
-          <h1><span>42.195km、</span><span>なのに。</span></h1>
+          <h1><span id="titleA">42.195km、</span><span id="titleB">なのに。</span></h1>
           <p class="tagline">走る、バカになる、東京をめぐる。</p>
-          <div class="start-btn">PRESS SPACE / TAP TO START</div>
+          <div class="mode-select">
+            <button class="mode-card" data-mode="marathon">
+              <b>42.195km、なのに。</b>
+              <small>0〜15km ・ 約 12 分 ・ 256 人</small>
+            </button>
+            <button class="mode-card" data-mode="1500m">
+              <span class="new">NEW</span>
+              <b>1500m、なのに。</b>
+              <small>5〜7 分 ・ 12 人 ・ 決勝</small>
+            </button>
+          </div>
+          <div class="start-btn">← → モード選択　SPACE / TAP でスタート</div>
           <div class="controls">
             <div><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> 横に移動</div>
             <div><kbd>↑</kbd><kbd>↓</kbd> / <kbd>W</kbd><kbd>S</kbd> ペース</div>
@@ -93,7 +104,7 @@
             <div><kbd>SHIFT</kbd> ダッシュ（スタミナ）</div>
             <div><kbd>M</kbd> 音 ON/OFF　<kbd>P</kbd> 一時停止</div>
           </div>
-          <p class="note">VERTICAL SLICE ─ 西新宿〜浅草（0〜15km）<br />先頭を走るほど、観客を沸かせるほど CHEER が増える。</p>
+          <p id="titleNote" class="note">VERTICAL SLICE ─ 西新宿〜浅草（0〜15km）<br />先頭を走るほど、観客を沸かせるほど CHEER が増える。</p>
         </div>
       </div>
 

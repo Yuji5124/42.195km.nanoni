@@ -45,3 +45,12 @@ export function formatRaceTime(sec) {
   const r = s % 60;
   return `${h}:${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
 }
+
+// 1500m 用: 3:31.27
+export function formatRaceTimeMs(sec) {
+  const cs = Math.max(0, Math.floor(sec * 100));
+  const m = Math.floor(cs / 6000);
+  const r = Math.floor((cs % 6000) / 100);
+  const c = cs % 100;
+  return `${m}:${String(r).padStart(2, '0')}.${String(c).padStart(2, '0')}`;
+}

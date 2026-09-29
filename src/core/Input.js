@@ -12,6 +12,7 @@ const KEYMAP = {
   mute: ['KeyM'],
   pause: ['KeyP', 'Escape'],
   retry: ['KeyR'],
+  title: ['KeyT'],
 };
 
 export class Input {

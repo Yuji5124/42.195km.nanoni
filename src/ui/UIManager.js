@@ -1,4 +1,4 @@
-import { formatRaceTime } from '../core/math.js';
+import { formatRaceTime, formatRaceTimeMs } from '../core/math.js';
 
 // UIManager: DOM オーバーレイ。常に大量の情報は出さない。
 // 常設: 左上 POSITION / 中央上 CHEER / 右上 DISTANCE / 下 STAMINA
@@ -15,6 +15,7 @@ export class UIManager {
       cheer: $('cheer'),
       combo: $('combo'),
       dist: $('dist'),
+      distTotal: $('distTotal'),
       progMe: $('progMe'),
       progSlice: $('progSlice'),
       time: $('time'),
@@ -68,6 +69,32 @@ export class UIManager {
     this.el.progSlice.style.left = `${(goalKm / fullKm) * 100}%`;
   }
 
+  // タイトル・HUD・リザルトの表記をモードに合わせる
+  setRaceMode(mode, total) {
+    this.mode = mode;
+    this.cache = {};
+    document.body.dataset.race = mode.id;
+    $('titleA').textContent = mode.title[0];
+    $('titleB').textContent = mode.title[1];
+    $('titleNote').innerHTML = mode.note;
+    document.querySelectorAll('[data-mode]').forEach((c) => c.classList.toggle('selected', c.dataset.mode === mode.id));
+    this.el.posTotal.textContent = total;
+    const meters = mode.distUnit === 'm';
+    this.el.distTotal.textContent = meters ? ` / ${Math.round(mode.fullKm * 1000)}m` : ` / ${mode.fullKm} km`;
+    this.el.dist.textContent = meters ? '0000' : '0.000';
+    this.el.progSlice.classList.toggle('hidden', meters);
+    if (!meters) this.setSliceGoal(mode.data.goalKm, mode.fullKm);
+    this.el.progMe.style.width = '0%';
+  }
+
+  formatTime(t) {
+    return this.mode?.timeFormat === 'ms' ? formatRaceTimeMs(t) : formatRaceTime(t);
+  }
+
+  formatDist(km) {
+    return this.mode?.distUnit === 'm' ? String(Math.floor(km * 1000 + 1e-6)).padStart(4, '0') : km.toFixed(3);
+  }
+
   // s: { position, total, cheer, combo, comboMul, km, fullKm, time, stamina, exhausted, kmh, area, tier }
   update(s) {
     this.set('pos', s.position, (v) => (this.el.pos.textContent = v));
@@ -78,9 +105,9 @@ export class UIManager {
       this.el.combo.textContent = v >= 2 ? `COMBO ×${v}` : '';
       this.el.combo.classList.toggle('show', v >= 2);
     });
-    this.set('dist', s.km.toFixed(3), (v) => (this.el.dist.textContent = v));
+    this.set('dist', this.formatDist(s.km), (v) => (this.el.dist.textContent = v));
     this.set('prog', Math.round(s.km * 400), () => (this.el.progMe.style.width = `${(s.km / s.fullKm) * 100}%`));
-    this.set('time', formatRaceTime(s.time), (v) => (this.el.time.textContent = v));
+    this.set('time', this.formatTime(s.time), (v) => (this.el.time.textContent = v));
     this.set('stamina', Math.round(s.stamina), (v) => (this.el.stamina.style.width = `${v}%`));
     this.set('exhausted', s.exhausted, (v) => this.el.staminaWrap.classList.toggle('exhausted', v));
     this.set('speed', s.kmh.toFixed(1), (v) => (this.el.speed.textContent = v));
@@ -93,7 +120,11 @@ export class UIManager {
     this.set('tier', s.tier, (v) => (this.el.hud.dataset.tier = v));
     if (this.tvOn) {
       this.set('tvPos', s.position, (v) => (this.el.tvPos.textContent = `${v}位`));
-      this.set('tvKm', s.km.toFixed(1), (v) => (this.el.tvKm.textContent = `${v}km`));
+      if (this.mode?.distUnit === 'm') {
+        this.set('tvKm', Math.max(0, Math.ceil((s.fullKm - s.km) * 100) * 10), (v) => (this.el.tvKm.textContent = `残り ${v}m`));
+      } else {
+        this.set('tvKm', s.km.toFixed(1), (v) => (this.el.tvKm.textContent = `${v}km`));
+      }
     }
   }
 
@@ -181,12 +212,14 @@ export class UIManager {
   countdown(text) {
     const c = this.el.countdown;
     c.textContent = text;
+    c.classList.toggle('long', [...(text ?? '')].length > 3);
     c.classList.remove('show');
     void c.offsetWidth;
     if (text) c.classList.add('show');
   }
 
   showResult(stats) {
+    if (stats.mode?.id === '1500m') return this.showResult1500(stats);
     const rank = stats.cheer >= 42000 ? 'S' : stats.cheer >= 28000 ? 'A' : stats.cheer >= 17000 ? 'B' : 'C';
     const titles = {
       S: '新宿を揺らした主役',
@@ -210,6 +243,37 @@ export class UIManager {
       </div>
       <div class="rank"><span class="grade g${rank}">${rank}</span><div><small>盛り上げ度</small><div>${titles[rank]}</div></div></div>
       <div class="again">SPACE / TAP でもう一度走る</div>
+      <button class="to-title" data-action="title">T ─ タイトルへ（モード選択）</button>
+    `;
+    this.el.result.classList.remove('hidden');
+  }
+
+  // 1500m のリザルト: TIME / POSITION / CHEER / OVERTAKES / NEAR MISS / MAX SPEED
+  showResult1500(stats) {
+    const rank = stats.cheer >= 16000 ? 'S' : stats.cheer >= 10000 ? 'A' : stats.cheer >= 6000 ? 'B' : 'C';
+    const titles = {
+      S: 'ジャンルを全部走り抜けた人',
+      A: '東京を沸かせた中距離ランナー',
+      B: '中継に映ったランナー',
+      C: 'まじめに 1500m を走った人',
+    };
+    const row = (k, v) => `<div class="row"><span>${k}</span><b>${v}</b></div>`;
+    const wr = stats.time < 206;
+    const podium = stats.position === 1 ? '優勝' : stats.position <= 3 ? '表彰台' : `${stats.position}位`;
+    this.el.resultBody.innerHTML = `
+      <div class="complete">1500m ${podium}</div>
+      <div class="sub">${wr ? '世界記録…!? ' : ''}1500mしか走っていません。</div>
+      <div class="grid">
+        ${row('TIME', formatRaceTimeMs(stats.time))}
+        ${row('POSITION', `${stats.position} / ${stats.total}`)}
+        ${row('CHEER', stats.cheer.toLocaleString('en-US'))}
+        ${row('OVERTAKES', stats.overtakes)}
+        ${row('NEAR MISS', stats.nearMiss ?? 0)}
+        ${row('MAX SPEED', `${stats.maxKmh.toFixed(1)} km/h`)}
+      </div>
+      <div class="rank"><span class="grade g${rank}">${rank}</span><div><small>盛り上げ度</small><div>${titles[rank]}</div></div></div>
+      <div class="again">SPACE / TAP でもう一度走る</div>
+      <button class="to-title" data-action="title">T ─ タイトルへ（モード選択）</button>
     `;
     this.el.result.classList.remove('hidden');
   }

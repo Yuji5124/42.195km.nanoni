@@ -98,7 +98,8 @@ export class CoursePath {
   }
 
   // InstancedMesh 用: (s, x, y) に置き、進行方向 + localYaw を向く行列を書き込む
-  writeMatrix(array, index, s, x, y, localYaw = 0, scale = 1) {
+  // roll: 進行方向を軸にした傾き（> 0 = 左へ傾く）。Ry(yaw)·Rz(roll)·S
+  writeMatrix(array, index, s, x, y, localYaw = 0, scale = 1, roll = 0) {
     const f = this.sample(s);
     const wx = f.x + f.cos * x;
     const wz = f.z - f.sin * x;
@@ -106,8 +107,15 @@ export class CoursePath {
     const c = Math.cos(yaw) * scale;
     const sn = Math.sin(yaw) * scale;
     const o = index * 16;
-    array[o] = c; array[o + 1] = 0; array[o + 2] = -sn; array[o + 3] = 0;
-    array[o + 4] = 0; array[o + 5] = scale; array[o + 6] = 0; array[o + 7] = 0;
+    if (roll) {
+      const cr = Math.cos(roll);
+      const sr = Math.sin(roll);
+      array[o] = c * cr; array[o + 1] = sr * scale; array[o + 2] = -sn * cr; array[o + 3] = 0;
+      array[o + 4] = -c * sr; array[o + 5] = cr * scale; array[o + 6] = sn * sr; array[o + 7] = 0;
+    } else {
+      array[o] = c; array[o + 1] = 0; array[o + 2] = -sn; array[o + 3] = 0;
+      array[o + 4] = 0; array[o + 5] = scale; array[o + 6] = 0; array[o + 7] = 0;
+    }
     array[o + 8] = sn; array[o + 9] = 0; array[o + 10] = c; array[o + 11] = 0;
     array[o + 12] = wx; array[o + 13] = y; array[o + 14] = wz; array[o + 15] = 1;
   }

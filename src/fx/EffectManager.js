@@ -37,7 +37,8 @@ export class EffectManager {
     this.pixelRatio = Math.min(window.devicePixelRatio, CONFIG.quality.maxPixelRatio);
 
     this.composer = new EffectComposer(renderer);
-    this.composer.addPass(new RenderPass(scene, camera));
+    this.renderPass = new RenderPass(scene, camera);
+    this.composer.addPass(this.renderPass);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth / 2, window.innerHeight / 2), 0.55, 0.5, 0.9);
     this.composer.addPass(this.bloom);
     this.digital = new ShaderPass(DigitalShader);
@@ -57,6 +58,15 @@ export class EffectManager {
     this.fpsAcc = 0;
     this.fpsFrames = 0;
     this.lowTime = 0;
+  }
+
+  // モード切替でワールド（シーン）を作り直したとき、パーティクルと残像を新しいシーンへ移す
+  setScene(scene, path) {
+    this.scene = scene;
+    this.path = path;
+    this.renderPass.scene = scene;
+    scene.add(this.sparks.points, this.confetti.points, this.trail.mesh);
+    this.reset();
   }
 
   setPreset(name) {

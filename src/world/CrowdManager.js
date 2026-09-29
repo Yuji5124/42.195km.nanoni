@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CONFIG } from '../config.js';
 import { createRng, hashInt, clamp } from '../core/math.js';
 import { createHumanMaterial, createHumanInstances, applyLook, randomSpectatorLook } from './RunnerModel.js';
+import { STAND } from './LandmarksStadium.js';
 
 const _v = new THREE.Vector3();
 
@@ -98,19 +99,26 @@ export class CrowdManager {
     const s = cell * this.spacing + rng.range(-0.25, 0.25);
     const km = this.distance.unitsToKm(s);
     const density = this.events.paramAt('crowd', km);
-    const p = lane.row === 0 ? clamp(density, 0, 1) : clamp(density - 0.5, 0, 1);
-    const visible = s > -40 && rng.next() < p;
+    // 配置: street = 歩道 2 列 / stadium = スタジアムの最前 2 段 / mega = 歩道 2 列とも満員
+    const layout = this.events.paramAt('crowdLayout', km) ?? 'street';
+    const p = lane.row === 0 || layout !== 'street' ? clamp(density, 0, 1) : clamp(density - 0.5, 0, 1);
+    const visible = (s > -40 || layout === 'stadium') && rng.next() < p;
     const arr = this.mesh.instanceMatrix.array;
-    const x = lane.side * (HALF + 1.25 + lane.row * 0.95 + rng.range(-0.15, 0.2));
+    let x = lane.side * (HALF + 1.25 + lane.row * 0.95 + rng.range(-0.15, 0.2));
+    let y = 0.12;
+    if (layout === 'stadium') {
+      x = lane.side * (STAND.x0 + (lane.row + 0.5) * STAND.depth + rng.range(-0.2, 0.2));
+      y = STAND.y0 + lane.row * STAND.rise;
+    }
     const yaw = (lane.side < 0 ? -Math.PI / 2 : Math.PI / 2) + rng.range(-0.35, 0.35);
-    this.path.writeMatrix(arr, i, s, x, 0.12, yaw, visible ? rng.range(0.92, 1.06) : 0);
+    this.path.writeMatrix(arr, i, s, x, y, yaw, visible ? rng.range(0.92, 1.06) : 0);
     applyLook(this.mesh, i, randomSpectatorLook(rng));
     this.mesh.geometry.attributes.iAnim.setXY(i, rng.next(), 1);
 
     if (lane.row === 0) {
       const fi = (laneIdx % 2) * this.perLane + slot;
       const pos = this.flashes.geometry.attributes.position;
-      this.path.toWorld(s - 0.2, x - lane.side * 0.3, 1.9, _v);
+      this.path.toWorld(s - 0.2, x - lane.side * 0.3, y + 1.8, _v);
       pos.setXYZ(fi, _v.x, _v.y, _v.z);
       this.flashes.geometry.attributes.aSeed.setX(fi, rng.next());
       this.flashes.geometry.attributes.aOn.setX(fi, visible && rng.chance(0.45) ? 1 : 0);

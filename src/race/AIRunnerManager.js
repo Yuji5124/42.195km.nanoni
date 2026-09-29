@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import { clamp, createRng, damp } from '../core/math.js';
 import { createHumanMaterial, createHumanInstances, applyLook, randomLook, LOOKS } from '../world/RunnerModel.js';
 import { makeBlobTexture } from '../world/textures.js';
+import { MiddleDistancePacer } from './MiddleDistancePacer.js';
 
 // AI ランナー群。全員を高精度 AI にはしない:
 //   - 全員: 基本速度 + うねり（ペースの波）+ 前方ブロック時の横移動 / 速度合わせ（boids/yuka 的な簡易ステアリング）
@@ -14,11 +15,13 @@ const LIMIT = CONFIG.road.runnerLimit;
 const RIVAL = 0;
 
 export class AIRunnerManager {
-  constructor(scene, bus, distance, path) {
+  // opts: モードごとの人数・並び方（modes.js の ai）
+  constructor(scene, bus, distance, path, opts = {}) {
     this.path = path;
     this.bus = bus;
     this.distance = distance;
-    const n = CONFIG.ai.count;
+    this.opts = { ...CONFIG.ai, ...opts };
+    const n = this.opts.count;
     this.n = n;
     this.s = new Float64Array(n);
     this.x = new Float32Array(n);
@@ -35,6 +38,8 @@ export class AIRunnerManager {
     this.bump = new Float32Array(n);
     this.relSign = new Int8Array(n);
     this.passed = new Uint8Array(n);
+    this.passTime = new Float32Array(n);
+    this.pacer = this.opts.pacing === 'middle' ? new MiddleDistancePacer(n) : null;
     this.order = new Int32Array(n);
     this.looks = [];
 
@@ -60,14 +65,19 @@ export class AIRunnerManager {
   // スタートの整列: 前列ほど速い（エリート）。プレイヤーは中団。
   reset(playerStart) {
     const rng = createRng(20240301);
-    const cols = CONFIG.ai.gridColumns;
+    const cols = this.opts.gridColumns;
     const colW = (LIMIT * 2) / (cols - 1);
     let k = 0;
     this.looks = [];
+    if (this.pacer) {
+      // 1500m: 12 人が横一列
+      this.pacer.setup(this, rng, playerStart);
+      k = this.n;
+    }
     for (let row = 0; k < this.n; row++) {
       for (let c = 0; c < cols && k < this.n; c++) {
         const x = -LIMIT + c * colW;
-        const s = -1 - row * CONFIG.ai.gridRowSpacing;
+        const s = -1 - row * this.opts.gridRowSpacing;
         if (Math.abs(s - playerStart.s) < 0.7 && Math.abs(x - playerStart.x) < colW * 0.8) continue;
         const i = k;
         this.s[i] = s + rng.range(-0.2, 0.2);
@@ -80,9 +90,11 @@ export class AIRunnerManager {
       }
     }
     // ライバルはプレイヤーの隣
-    this.s[RIVAL] = playerStart.s + 0.4;
-    this.x[RIVAL] = playerStart.x + 1.3;
-    this.base[RIVAL] = 16.4;
+    if (!this.pacer) {
+      this.s[RIVAL] = playerStart.s + 0.4;
+      this.x[RIVAL] = playerStart.x + 1.3;
+      this.base[RIVAL] = 16.4;
+    }
 
     for (let i = 0; i < this.n; i++) {
       this.y[i] = 0;
@@ -97,6 +109,7 @@ export class AIRunnerManager {
       this.bump[i] = 0;
       this.relSign[i] = this.s[i] > playerStart.s ? 1 : -1;
       this.passed[i] = 0;
+      this.passTime[i] = -99;
       this.order[i] = i;
       const look = i === RIVAL ? { ...LOOKS.ninja, costume: 'ninja' } : randomLook(rng, 0.22);
       this.looks.push(look);
@@ -145,6 +158,10 @@ export class AIRunnerManager {
     return this.x[RIVAL];
   }
 
+  nameOf(i) {
+    return this.pacer?.names[i] ?? (i === RIVAL ? '忍者' : `ランナー ${i}`);
+  }
+
   // ctx: { running, player, rules, course, finalStretch, goalS }
   update(dt, ctx) {
     this.time += dt;
@@ -154,19 +171,26 @@ export class AIRunnerManager {
     const x = this.x;
     const o = this.order;
     this.sortOrder();
+    let packCenter = 0;
+    if (this.pacer) {
+      for (let i = 0; i < this.n; i++) packCenter += s[i];
+      packCenter /= this.n;
+    }
 
     for (let k = 0; k < this.n; k++) {
       const i = o[k];
       let target = 0;
       if (ctx.running) {
-        target = this.base[i] * (1 + 0.035 * Math.sin(this.time * this.wave[i] + this.waveOff[i]));
+        target = this.pacer
+          ? this.pacer.target(this, i, ctx, packCenter)
+          : this.base[i] * (1 + 0.035 * Math.sin(this.time * this.wave[i] + this.waveOff[i]));
         if (s[i] > ctx.goalS + 5) target = 6;
       }
 
       // ライバル: プレイヤーの少し前をキープ（ただし上限あり → ダッシュで振り切れる）
-      if (i === RIVAL && ctx.running && s[i] < ctx.goalS) {
+      if (i === RIVAL && !this.pacer && ctx.running && s[i] < ctx.goalS) {
         const gap = s[i] - player.s;
-        const cap = ctx.finalStretch ? 21.5 : 19;
+        const cap = ctx.finalStretch ? this.opts.rivalCapFinal ?? 21.5 : this.opts.rivalCap ?? 19;
         if (gap < -60) target = cap;
         else if (gap > 50) target = 14;
         else target = clamp(player.speed + (2.5 - gap) * 0.9, 13, cap);
@@ -258,7 +282,7 @@ export class AIRunnerManager {
     }
 
     this.checkPlayer(player);
-    this.writeInstances(player, ctx.excitement ?? 0);
+    this.writeInstances(player, ctx.excitement ?? 0, rules.carLean ? 1 : 0);
   }
 
   // プレイヤーとの接触・追い抜き判定
@@ -279,15 +303,19 @@ export class AIRunnerManager {
       if (sign !== this.relSign[i] && Math.abs(rel) < 6) {
         if (sign < 0) {
           // 同じ相手との抜きつ抜かれつで CHEER が暴走しないよう、スコアは初回のみ
+          // （12 人の 1500m は、しばらく経てば同じ相手でももう一度数える）
+          const again = this.opts.rescoreAfter > 0 && this.time - this.passTime[i] > this.opts.rescoreAfter;
           this.bus.emit('overtake', {
             index: i,
             dx: Math.abs(this.x[i] - player.x),
             airborne: player.y > 0.9,
             rival: i === RIVAL,
-            first: !this.passed[i],
+            first: !this.passed[i] || again,
             look: this.looks[i],
+            name: this.nameOf(i),
           });
           this.passed[i] = 1;
+          this.passTime[i] = this.time;
         } else {
           this.bus.emit('overtaken', { index: i, rival: i === RIVAL });
         }
@@ -296,7 +324,8 @@ export class AIRunnerManager {
     }
   }
 
-  writeInstances(player, excitement) {
+  // carLean: レースゲーム区間は車のようにカーブ・車線変更で車体（体）を傾ける
+  writeInstances(player, excitement, carLean = 0) {
     const arr = this.mesh.instanceMatrix.array;
     const sh = this.shadows.instanceMatrix.array;
     const anim = this.mesh.geometry.attributes.iAnim;
@@ -304,7 +333,8 @@ export class AIRunnerManager {
       const rel = this.s[i] - player.s;
       const visible = rel > -260 && rel < 420;
       const yaw = -this.vx[i] * 0.06;
-      this.path.writeMatrix(arr, i, this.s[i], this.x[i], this.y[i], yaw, visible ? 1 : 0);
+      const roll = carLean ? clamp(this.path.kappa(this.s[i]) * this.speed[i] * this.speed[i] * 0.12 - this.vx[i] * 0.1, -0.45, 0.45) : 0;
+      this.path.writeMatrix(arr, i, this.s[i], this.x[i], this.y[i], yaw, visible ? 1 : 0, roll);
       const amp = this.speed[i] < 0.5 ? 0.12 : this.y[i] > 0 ? 0.35 : Math.min(1.2, 0.5 + this.speed[i] / 22);
       anim.setXY(i, this.speed[i] < 0.5 ? this.time * 3 + this.phase[i] : this.phase[i], amp);
       const shadowScale = visible ? Math.max(0.3, 1 - this.y[i] * 0.3) : 0;

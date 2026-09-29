@@ -8,6 +8,7 @@ import {
   makeGroundSectionTexture,
 } from './textures.js';
 import { CONFIG } from '../config.js';
+import { stadiumBuilders } from './LandmarksStadium.js';
 
 // 距離に紐づくランドマーク（スタート/km/ゴールアーチ、都庁、大ガード、巨大ビジョン…）。
 // すべて「z = 0 が設置地点」のローカル座標で組み立て、TokyoChunkManager が配置する。
@@ -441,6 +442,8 @@ function overpassHighway(g) {
     },
   };
 }
+
+Object.assign(builders, stadiumBuilders);
 
 export function buildLandmark(lm, ctx = {}) {
   const fn = builders[lm.type];

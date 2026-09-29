@@ -343,3 +343,62 @@ export function makeFinishLineTexture() {
   }
   return toTexture(c, { pixel: true });
 }
+
+export { canvas as makeCanvas, toTexture };
+
+// スタジアムの客席（1 段ぶん）: 座った観客がずらっと並ぶ。PS2 世代の「板に描いた観客」
+export function makeStandCrowdTexture(seed = 3) {
+  const [c, g] = canvas(1024, 64);
+  const rng = createRng(seed);
+  g.fillStyle = '#1a2a5a';
+  g.fillRect(0, 0, 1024, 64);
+  // 座席の列
+  g.fillStyle = '#243a78';
+  for (let x = 0; x < 1024; x += 32) g.fillRect(x + 3, 44, 26, 20);
+  const shirts = ['#ff3d7f', '#39e6ff', '#ffd23f', '#ffffff', '#ff7a2a', '#7a5cff', '#2ecc71', '#e8322a', '#1f7bff', '#f4f4f4'];
+  const skins = ['#f1c9a5', '#e0ac85', '#c68b62', '#8d5a3c'];
+  for (let i = 0; i < 32; i++) {
+    if (rng.chance(0.08)) continue; // 空席
+    const cx = i * 32 + 16 + rng.range(-3, 3);
+    const shirt = rng.pick(shirts);
+    // 体
+    g.fillStyle = shirt;
+    g.fillRect(cx - 9, 30, 18, 26);
+    // 腕を上げている人
+    if (rng.chance(0.35)) {
+      g.fillRect(cx - 12, 12, 4, 20);
+      g.fillRect(cx + 8, 12, 4, 20);
+    }
+    // 頭
+    g.fillStyle = rng.pick(skins);
+    g.beginPath();
+    g.arc(cx, 23, 7, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = rng.chance(0.25) ? '#6a4a2a' : '#15151c';
+    g.fillRect(cx - 7, 15, 14, 5);
+    // 旗・タオル
+    if (rng.chance(0.12)) {
+      g.fillStyle = rng.pick(shirts);
+      g.fillRect(cx + 10, 4, 14, 10);
+    }
+  }
+  return toTexture(c, { repeat: true });
+}
+
+// 陸上トラックのライン（スタート / フィニッシュ）とレーン番号
+export function makeTrackLineTexture(kind) {
+  const [c, g] = canvas(1024, 256);
+  g.clearRect(0, 0, 1024, 256);
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, kind === 'finish' ? 96 : 10, 1024, kind === 'finish' ? 64 : 22);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  if (kind === 'start') {
+    g.font = `bold 64px "Chakra Petch", Arial, sans-serif`;
+    for (let i = 0; i < 8; i++) g.fillText(String(i + 1), (i + 0.5) * 128, 140);
+  } else {
+    g.font = `92px ${FONT_JP}`;
+    g.fillText('FINISH', 512, 216);
+  }
+  return toTexture(c);
+}
