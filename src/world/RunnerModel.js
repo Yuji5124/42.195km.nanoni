@@ -168,6 +168,8 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
     uRimColor: { value: new THREE.Color(rimColor) },
     // カメラとプレイヤーの間にいる AI をディザで消す距離（0 = 無効）
     uNearFade: { value: 0 },
+    // 暗くする（0〜1）: 横スクロールで奥の集団を影にする
+    uDim: { value: 0 },
   };
   mat.userData.uniforms = uniforms;
   mat.onBeforeCompile = (shader) => {
@@ -181,7 +183,7 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec3 vRCol;\nvarying vec3 vRimView;\nuniform float uRim;\nuniform vec3 uRimColor;\nuniform float uNearFade;'
+        '#include <common>\nvarying vec3 vRCol;\nvarying vec3 vRimView;\nuniform float uRim;\nuniform vec3 uRimColor;\nuniform float uNearFade;\nuniform float uDim;'
       )
       .replace(
         '#include <clipping_planes_fragment>',
@@ -193,12 +195,12 @@ export function createHumanMaterial({ mode = 'runner', rim = 0.4, rimColor = 0x3
           if (fadeA < dither) discard;
         }`
       )
-      .replace('#include <color_fragment>', 'diffuseColor.rgb *= vRCol;')
+      .replace('#include <color_fragment>', 'diffuseColor.rgb *= vRCol * (1.0 - uDim);')
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         float rimF = pow(1.0 - abs(dot(normalize(vRimView), normal)), 2.5);
-        totalEmissiveRadiance += uRimColor * rimF * uRim;`
+        totalEmissiveRadiance += uRimColor * rimF * uRim * (1.0 - uDim);`
       );
   };
   mat.customProgramCacheKey = () => `human-${mode}`;

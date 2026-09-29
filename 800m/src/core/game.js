@@ -167,9 +167,22 @@ export class Game {
     bus.on(EV.RACE_END, () => (this.raceEndTime = this.clock.realTime));
   }
 
+  // 42.195km、なのに。のタイトルから来た時（#from-main）だけ「戻る」を出す
+  backToMain() {
+    if (history.length > 1) history.back();
+    else location.href = '../index.html';
+  }
+
   setupScreens() {
+    const fromMain = location.hash === '#from-main';
+    document.querySelectorAll('.back-main').forEach((b) => b.classList.toggle('hidden', !fromMain));
     $('#title').addEventListener('pointerdown', (e) => {
       const a = e.target.closest('[data-action]')?.dataset.action;
+      if (a === 'back') {
+        e.stopPropagation();
+        this.backToMain();
+        return;
+      }
       if (a === 'reroll') {
         this.seed = randomSeed();
         $('#seedInput').value = this.seed;
@@ -190,6 +203,7 @@ export class Game {
       const a = e.target.closest('[data-action]')?.dataset.action;
       if (a === 'same') this.restart(this.seed);
       else if (a === 'new') this.restart(randomSeed());
+      else if (a === 'back') this.backToMain();
     });
     $('#devpanel').addEventListener('pointerdown', (e) => {
       const a = e.target.closest('[data-dev-action]')?.dataset.devAction;

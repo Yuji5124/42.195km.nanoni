@@ -69,6 +69,20 @@ export class UIManager {
     this.el.progSlice.style.left = `${(goalKm / fullKm) * 100}%`;
   }
 
+  // タイトルで 800m（別ページ）を選んでいる間の表示。on=false でいまのモードの表示に戻す
+  select800(on, mode = this.mode) {
+    document.querySelectorAll('[data-mode]').forEach((c) => c.classList.toggle('selected', on ? c.dataset.mode === '800m' : c.dataset.mode === mode?.id));
+    if (on) {
+      $('titleA').textContent = '800m、';
+      $('titleB').textContent = 'なのに。';
+      $('titleNote').innerHTML = '2周だけなのに、何回ゲーム変わるの？<br />12 人・400m トラック 2 周。SPACE / TAP で 800m のページへ移動します。';
+    } else if (mode) {
+      $('titleA').textContent = mode.title[0];
+      $('titleB').textContent = mode.title[1];
+      $('titleNote').innerHTML = mode.note;
+    }
+  }
+
   // タイトル・HUD・リザルトの表記をモードに合わせる
   setRaceMode(mode, total) {
     this.mode = mode;
@@ -152,6 +166,17 @@ export class UIManager {
     c.classList.add('show');
     clearTimeout(this.timers.caption);
     this.timers.caption = setTimeout(() => c.classList.remove('show'), ms);
+  }
+
+  // 横スクロールの跳ぶ合図: 近づくと「▼ SPACE」、越えられる瞬間に大きく「JUMP!」
+  jumpCue(cue, touch) {
+    const el = (this.el.jumpcue ??= document.getElementById('jumpcue'));
+    if (!el) return;
+    const state = !cue ? '' : cue.now ? 'now' : cue.t < 1.1 ? 'soon' : '';
+    if (state === this.jumpState) return;
+    this.jumpState = state;
+    el.className = `jumpcue ${state}`;
+    el.textContent = state === 'now' ? 'JUMP!' : state === 'soon' ? (touch ? '▼ JUMP ボタン' : '▼ SPACE') : '';
   }
 
   hint(text, ms = 4000) {

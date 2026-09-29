@@ -266,3 +266,8 @@ body[data-skin="rpg"] .announcer { bottom: auto; top: 130px; }
   .r-table td:first-child { font-size: 15px; }
   .r-had ul { max-height: 42vh; overflow-y: auto; }
 }
+
+/* 42.195km、なのに。のタイトルへ戻る（そこから来た時だけ） */
+.back-main { font: inherit; color: #fff; background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.45); padding: 6px 12px; cursor: pointer; letter-spacing: .05em; }
+.title .back-main { position: absolute; left: max(16px, env(safe-area-inset-left)); top: max(16px, env(safe-area-inset-top)); z-index: 2; }
+.back-main:hover, .back-main:focus-visible { border-color: var(--cyan); outline: none; }

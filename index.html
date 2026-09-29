@@ -60,6 +60,7 @@
         <div class="sub"></div>
       </div>
       <div id="hint" class="hint"></div>
+      <div id="jumpcue" class="jumpcue"></div>
       <div id="commentary" class="commentary"></div>
 
       <!-- ===== TV 中継テロップ ===== -->
@@ -112,12 +113,12 @@
               <b>1500m、なのに。</b>
               <small>5〜7 分 ・ 12 人 ・ 決勝</small>
             </button>
-            <!-- 800m は別ページ（800m/）。モード切り替えの対象にしない（data-mode なし） -->
-            <a class="mode-card mode-link" href="./800m/" onpointerdown="event.stopPropagation()">
+            <!-- 800m は別ページ（800m/index.html）。選んでスタートするとページを移動する -->
+            <button class="mode-card" data-mode="800m">
               <span class="new">NEW</span>
               <b>800m、なのに。</b>
               <small>2〜4 分 ・ 2 周 ・ 何回もゲームが変わる</small>
-            </a>
+            </button>
           </div>
           <div class="start-btn">← → モード選択　SPACE / TAP でスタート</div>
           <div class="controls">

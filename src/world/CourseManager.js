@@ -9,6 +9,10 @@ import { createAnimalInstances, CAT_LOOKS, setAnimalLook } from './AnimalModel.j
 // 密度やパターンは EventDirector.paramAt(km) から読む（データ駆動）。
 
 const LIMIT = CONFIG.road.runnerLimit - 0.4;
+// 横スクロール区間の障害物の間隔（巡航 16u/s で約 4〜4.8 秒に 1 つ）
+const SIDE_GAP = [60, 76];
+// ジャンプの合図: 障害物に着くまでの秒数がこの範囲なら「今跳べば越えられる」
+export const JUMP_WINDOW = [0.1, 0.36];
 
 function colored(geo, hex) {
   const c = new THREE.Color(hex);
@@ -137,6 +141,10 @@ const CAR_PAINT = [0xffc21a, 0xeeeeee, 0xd02030, 0x2050c0, 0x30a060, 0x222228].m
 const TAXI = [0, 4, 5];
 
 const CAT_SCALE = 2.0;
+// 横スクロールで光らせる障害物（群衆の中でも形が分かる）
+const GLOWING = ['hurdle', 'crate', 'vending', 'sign', 'step'];
+const MARK_SOON = new THREE.Color(0xffd21f);
+const MARK_NOW = new THREE.Color(0x3dff7a);
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -177,6 +185,29 @@ export class CourseManager {
       scene.add(mesh);
       this.meshes[type] = mesh;
     }
+    // 横スクロール区間の目印: 前方の障害物の上に ▼（近づくと黄 → 跳ぶ瞬間は緑）
+    const markGeo = mergeGeometries([
+      new THREE.ConeGeometry(0.62, 0.9, 4).rotateX(Math.PI).rotateY(Math.PI / 4).translate(0, 0.45, 0),
+      new THREE.BoxGeometry(0.2, 0.6, 0.2).translate(0, 1.5, 0),
+    ]);
+    // ▼ から障害物までの細い光の柱（どれに対する合図かが分かる）
+    this.beams = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.08, 1, 0.08).translate(0, 0.5, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, fog: false, toneMapped: false, depthWrite: false }),
+      12
+    );
+    this.beams.frustumCulled = false;
+    this.beams.count = 0;
+    this.beams.setColorAt(0, new THREE.Color(0xffd21f));
+    scene.add(this.beams);
+    this.markers = new THREE.InstancedMesh(markGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, toneMapped: false }), 12);
+    this.markers.frustumCulled = false;
+    this.markers.count = 0;
+    this.markers.renderOrder = 3;
+    this.markers.setColorAt(0, new THREE.Color(0xffd21f));
+    scene.add(this.markers);
+    this.assist = false;
+    this.cue = null;
     this.items = [];
     this.reset();
   }
@@ -213,25 +244,18 @@ export class CourseManager {
     return item;
   }
 
-  // 横スクロール区間のパターン: レーン上にハードル・木箱、上空に ♪ トークン
+  // 横スクロール区間のパターン: 障害物は 1 回に 1 つだけ（連続させない）、間はたっぷり。上空に ♪ トークン
+  //   ハードル（低くて薄い）が基本。ときどき障害物なしの ♪ だけ（ひと息つく）
   spawnSide2D(s, lane) {
     const r = this.rng.next();
-    if (r < 0.55) {
+    if (r < 0.7) {
       this.add('hurdle', s, lane);
       // 地上（中心 0.9）では届かず、ジャンプ頂点（中心 ≒ 2.6）で取れる高さ
       for (const [ds, y] of [[-2.2, 2.2], [0, 3.0], [2.2, 2.2]]) this.add('token', s + ds, lane, { y });
-      return 22 + this.rng.range(0, 10);
+    } else {
+      for (let k = 0; k < 4; k++) this.add('token', s + k * 2.4, lane, { y: 1.3 });
     }
-    if (r < 0.75) {
-      this.add('hurdle', s, lane);
-      this.add('hurdle', s + 7.5, lane);
-      this.add('token', s + 3.75, lane, { y: 2.6 });
-      return 30 + this.rng.range(0, 8);
-    }
-    this.add('crate', s, lane);
-    this.add('token', s, lane, { y: 3.2 });
-    for (let k = 1; k <= 3; k++) this.add('token', s + 6 + k * 2.2, lane, { y: 1.3 });
-    return 28 + this.rng.range(0, 8);
+    return SIDE_GAP[0] + this.rng.range(0, SIDE_GAP[1] - SIDE_GAP[0]);
   }
 
   // 歩道で待ち、プレイヤーが近づくと横切る猫
@@ -320,30 +344,23 @@ export class CourseManager {
     return rng.range(26, 38);
   }
 
-  // 1500m の横スクロール: 倒れた自販機・工事の立て看板・段差
+  // 1500m の横スクロール: 倒れた自販機・工事の立て看板・段差。1 回に 1 つだけ、間はたっぷり
   spawnSide2DTokyo(s, lane) {
     const rng = this.rng;
     const r = rng.next();
-    if (r < 0.3) {
+    if (r < 0.35) {
       this.add('vending', s, lane);
       for (const [ds, y] of [[-2.2, 2.2], [0, 2.9], [2.2, 2.2]]) this.add('token', s + ds, lane, { y });
-      return 24 + rng.range(0, 8);
-    }
-    if (r < 0.55) {
+    } else if (r < 0.65) {
       this.add('sign', s, lane);
       this.add('token', s, lane, { y: 2.8 });
-      return 22 + rng.range(0, 8);
-    }
-    if (r < 0.78) {
+    } else if (r < 0.85) {
       this.add('step', s, lane);
-      this.add('sign', s + 8, lane);
-      for (let k = 0; k < 3; k++) this.add('token', s + 2 + k * 2, lane, { y: 2.0 + k * 0.3 });
-      return 30 + rng.range(0, 8);
+      for (let k = 0; k < 3; k++) this.add('token', s - 1 + k * 2, lane, { y: 2.0 + k * 0.3 });
+    } else {
+      for (let k = 0; k < 4; k++) this.add('token', s + k * 2.4, lane, { y: 1.3 });
     }
-    this.add('crate', s, lane);
-    this.add('vending', s + 9, lane);
-    this.add('token', s + 4.5, lane, { y: 2.5 });
-    return 32 + rng.range(0, 8);
+    return SIDE_GAP[0] + rng.range(0, SIDE_GAP[1] - SIDE_GAP[0]);
   }
 
   spawnNormal(s, density, cats = 0) {
@@ -377,6 +394,7 @@ export class CourseManager {
 
   update(dt, player, running) {
     this.time += dt;
+    this.player = player;
     // 生成
     const horizon = player.s + 330;
     let guard = 0;
@@ -468,7 +486,10 @@ export class CourseManager {
       }
       // 障害物
       const halfLen = def.halfLen ?? 0.25;
-      if (Math.abs(ds) < halfLen + 0.3 && dx < def.halfW + 0.28 && player.y < def.h - 0.05 && !player.falling && player.invuln <= 0) {
+      // 横スクロール（assist）: 前後の余白を小さく、上をかすっただけならセーフ
+      const lenPad = this.assist ? 0.08 : 0.3;
+      const topPad = this.assist ? 0.3 : 0.05;
+      if (Math.abs(ds) < halfLen + lenPad && dx < def.halfW + 0.28 && player.y < def.h - topPad && !player.falling && player.invuln <= 0) {
         it.resolved = true;
         it.hit = true;
         if (def.car) {
@@ -489,7 +510,7 @@ export class CourseManager {
         it.resolved = true;
         if (def.car) {
           if (!player.falling) this.bus.emit('carPass', { dx: dx - def.halfW });
-        } else if (dx < def.halfW + 0.28 && player.y >= def.h - 0.05) {
+        } else if (dx < def.halfW + 0.28 && player.y >= def.h - topPad) {
           const clearance = player.y - def.h;
           this.bus.emit('hazardClear', { type: it.type, clearance, perfect: clearance < 0.35 });
         } else if (dx < def.halfW + 0.95 && !player.falling) {
@@ -524,6 +545,70 @@ export class CourseManager {
   clearAhead(fromS) {
     this.items = this.items.filter((it) => it.s < fromS);
     this.nextS = Math.max(this.nextS, fromS);
+  }
+
+  // 横スクロール区間: 前方の障害物に ▼ を立て、いちばん近いものの「跳ぶ合図」を this.cue に入れる
+  //   cue = { t: 着くまでの秒数, now: 今跳べば越えられる }（HUD の JUMP! が読む）
+  writeMarkers() {
+    const mk = this.markers;
+    this.cue = null;
+    if (!this.assist || !this.player) {
+      mk.count = 0;
+      this.beams.count = 0;
+      for (const type of GLOWING) {
+        const mat = this.meshes[type].material;
+        if (mat.userData.glow) {
+          mat.userData.glow = 0;
+          mat.emissive.setRGB(0, 0, 0);
+        }
+      }
+      return;
+    }
+    const p = this.player;
+    const speed = Math.max(4, p.speed);
+    let n = 0;
+    let best = Infinity;
+    for (const it of this.items) {
+      if (it.def.kind !== 'hazard' || it.resolved || it.knock) continue;
+      const ds = it.s - p.s;
+      if (ds < -0.5 || ds > 42 || Math.abs(it.x - p.x) > it.def.halfW + 0.6) continue;
+      const t = ds / speed;
+      if (t < best) {
+        best = t;
+        this.cue = { t, now: t >= JUMP_WINDOW[0] && t <= JUMP_WINDOW[1], type: it.type };
+      }
+      if (n >= 12) continue;
+      const now = t >= JUMP_WINDOW[0] - 0.05 && t <= JUMP_WINDOW[1];
+      const f = this.path.sample(it.s);
+      const bob = Math.sin(this.time * 7 + it.s) * 0.15;
+      const sc = now ? 1.4 : 1;
+      const top = it.def.h + 1.3 + bob;
+      const wx = f.x + f.cos * it.x;
+      const wz = f.z - f.sin * it.x;
+      _e.set(0, f.theta + this.time * 2.5, 0, 'YXZ');
+      _m.compose(_p.set(wx, top, wz), _q.setFromEuler(_e), _s.setScalar(sc));
+      mk.setMatrixAt(n, _m);
+      mk.setColorAt(n, now ? MARK_NOW : MARK_SOON);
+      _m.compose(_p.set(wx, it.def.h, wz), _q.identity(), _s.set(1, top - it.def.h, 1));
+      this.beams.setMatrixAt(n, _m);
+      this.beams.setColorAt(n, now ? MARK_NOW : MARK_SOON);
+      n++;
+    }
+    mk.count = n;
+    this.beams.count = n;
+    for (const m of [mk, this.beams]) {
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    // 障害物そのものも少し光らせる
+    const glow = this.assist ? 0.55 : 0;
+    for (const type of GLOWING) {
+      const mat = this.meshes[type].material;
+      if (mat.userData.glow !== glow) {
+        mat.userData.glow = glow;
+        mat.emissive.setRGB(glow, glow * 0.9, glow * 0.75);
+      }
+    }
   }
 
   writeInstances() {
@@ -561,6 +646,7 @@ export class CourseManager {
       _m.compose(_p.set(f.x + f.cos * it.x, y, f.z - f.sin * it.x), _q.setFromEuler(_e), _s.setScalar(Math.max(0.0001, scale)));
       mesh.setMatrixAt(i, _m);
     }
+    this.writeMarkers();
     for (const [type, mesh] of Object.entries(this.meshes)) {
       mesh.count = Math.min(counts[type], TYPES[type].cap);
       mesh.instanceMatrix.needsUpdate = true;

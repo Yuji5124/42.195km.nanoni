@@ -2,8 +2,12 @@ import * as THREE from 'three';
 import { CONFIG, MODES } from '../config.js';
 import { EventBus } from './EventBus.js';
 import { Input } from './Input.js';
-import { clamp } from './math.js';
+import { clamp, damp } from './math.js';
 import { getMode, MODE_ORDER } from '../modes/modes.js';
+
+// 800m、なのに。（別ページ）。#from-main があると、800m 側に「タイトルへ戻る」が出る
+const M800 = '800m';
+const URL_800M = './800m/index.html#from-main';
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';
 import { RunnerController } from '../race/RunnerController.js';
@@ -208,9 +212,20 @@ export class Game {
   }
 
   // タイトルでモードを切り替える（ワールドを作り直す）
+  //   800m は別のページ（800m/index.html）。選んでいる間はカードを光らせるだけで、スタートで移動する
   selectMode(id) {
+    if (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT) return;
+    if (id === M800) {
+      this.pick800 = true;
+      this.ui.select800(true);
+      return;
+    }
+    if (this.pick800) {
+      this.pick800 = false;
+      this.ui.select800(false, this.mode);
+    }
     const mode = getMode(id);
-    if (mode.id === this.modeId || (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT)) return;
+    if (mode.id === this.modeId) return;
     try {
       localStorage.setItem('nanoni.mode', mode.id);
     } catch {
@@ -464,7 +479,9 @@ export class Game {
       if (kind === 'nearMiss' || kind === 'dodge') this.race.stats.nearMiss++;
       // ただの追い抜きは連続するとポップが埋まるので間引く（スコアは全部入る）
       const now = performance.now();
-      if (kind !== 'overtake' || now - (this.lastOvertakePop ?? 0) > 700) {
+      // 横スクロール中は画面の真ん中を空けておく（障害物が見えるように）: 小さなポップは出さない
+      const quiet = this.course.assist && amount < 100 && kind !== 'clear' && kind !== 'perfectClear';
+      if (!quiet && (kind !== 'overtake' || now - (this.lastOvertakePop ?? 0) > 700)) {
         ui.popup(label, amount, { big: amount >= 100 });
         if (kind === 'overtake') this.lastOvertakePop = now;
       }
@@ -560,6 +577,10 @@ export class Game {
 
   startRace() {
     if (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT) return;
+    if (this.pick800) {
+      location.href = URL_800M;
+      return;
+    }
     this.audio.init();
     this.audio.setMusic(null);
     this.resetWorld();
@@ -682,8 +703,9 @@ export class Game {
     const { input, race } = this;
     if (input.pressed('mute')) this.audio.toggleMute();
     if (race.state === RACE.TITLE && (input.pressed('left') || input.pressed('right'))) {
-      const i = MODE_ORDER.indexOf(this.modeId);
-      const next = MODE_ORDER[(i + (input.pressed('right') ? 1 : MODE_ORDER.length - 1)) % MODE_ORDER.length];
+      const order = [...MODE_ORDER, M800];
+      const i = order.indexOf(this.pick800 ? M800 : this.modeId);
+      const next = order[(i + (input.pressed('right') ? 1 : order.length - 1)) % order.length];
       this.selectMode(next);
     }
     if (race.state === RACE.RESULT && input.pressed('title')) this.backToTitle();
@@ -718,7 +740,10 @@ export class Game {
       // 「よーい」でスタートの構え
       ready: race.state === RACE.COUNTDOWN && race.countdown <= 2.05,
     });
+    // 横スクロール区間: 障害物の上に ▼、跳ぶ瞬間に JUMP!、当たり判定は見た目どおり少し甘く
+    this.course.assist = running && !!rules.screenControls;
     this.course.update(dt, player, running);
+    this.ui.jumpCue(this.course.cue, this.input.isTouch);
     this.ai.update(dt, {
       running: playing || race.state === RACE.RESULT,
       player,
@@ -764,6 +789,9 @@ export class Game {
     const pw = player.position;
     const camDist = Math.hypot(cp.x - pw.x, cp.y - (pw.y + 1), cp.z - pw.z);
     this.ai.material.userData.uniforms.uNearFade.value = camDist < 14 ? camDist - 1.2 : 0;
+    // 真横の視点では、奥を走る集団を暗くする（手前の自分と障害物が浮き上がる）
+    this.aiDim = damp(this.aiDim ?? 0, this.course.assist ? 0.72 : 0, 3, dt);
+    this.ai.material.userData.uniforms.uDim.value = this.aiDim;
     this.chunks.update(player.s, dt, this.cameraDirector.sideBlend);
     const skyAmt = this.chunks.skyAmount(player.s);
     const stadAmt = this.chunks.stadiumAmount(player.s);
