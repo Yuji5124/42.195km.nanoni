@@ -84,6 +84,9 @@ export class BoxingMode {
     this.field.uniforms.uCore.value.set(0, 0); // 全員リング（原点）を向く
     this.field.uniforms.uLight.value = 0.55;
     this.near = new NearCrowd(scene, this.layout, this.plan, this.crowd, this.field);
+    // 入場のピンスポット（花道を歩く人を追う）
+    this.followSpot = new THREE.SpotLight(0xfff4e6, 0, 30, 0.3, 0.5, 0);
+    scene.add(this.followSpot, this.followSpot.target);
     this.buildNear(q.near);
 
     // ---- 選手・レフェリー・試合
@@ -92,6 +95,26 @@ export class BoxingMode {
     this.E = new BoxerModel('champion');
     this.R = new BoxerModel('referee');
     scene.add(this.P.root, this.E.root, this.R.root);
+    // コーナーの椅子（インターバルだけ）
+    const stoolMat = new THREE.MeshStandardMaterial({ color: 0x2a2d3a, roughness: 0.7 });
+    this.stools = ['red', 'blue'].map((c) => {
+      const g = new THREE.Group();
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 12), stoolMat);
+      seat.position.y = 0.5;
+      g.add(seat);
+      for (let k = 0; k < 3; k++) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.025, 0.5, 5), stoolMat);
+        const a = (k / 3) * Math.PI * 2;
+        leg.position.set(Math.cos(a) * 0.14, 0.25, Math.sin(a) * 0.14);
+        g.add(leg);
+      }
+      const p = this.cornerSeat(c);
+      // 椅子は腰の少し後ろ
+      g.position.set(p.x - Math.sin(p.yaw) * 0.12, RING.y, p.z - Math.cos(p.yaw) * 0.12);
+      g.visible = false;
+      scene.add(g);
+      return g;
+    });
     this.animP = new BoxerAnimator(this.P, this.core.player);
     this.animE = new BoxerAnimator(this.E, this.core.enemy);
     this.animR = new RefereeAnimator(this.R);
@@ -239,6 +262,7 @@ export class BoxingMode {
     if (this.phase !== 'title') return;
     this.wakeAudio();
     document.getElementById('intro').classList.add('hidden');
+    for (const st of this.stools) st.visible = false;
     const r = +(this.params.get('round') ?? 0);
     if (r >= 1 && r <= ROUNDS) {
       this.round = r - 1;
@@ -267,12 +291,15 @@ export class BoxingMode {
   // 2 人をリングの中へ
   enterRing() {
     document.getElementById('skipBtn').classList.add('hidden');
+    this.followSpot.intensity = 0;
+    for (const st of this.stools) st.visible = false;
     this.animP.override = null;
     this.animE.override = null;
     this.core.resetPositions();
   }
 
   nextRound() {
+    for (const st of this.stools) st.visible = false;
     this.round++;
     this.roundT = 0;
     this.core.resetPositions();
@@ -315,6 +342,8 @@ export class BoxingMode {
     this.animP.override = { action: 'rest', pose: 'rest', ...this.cornerSeat('red') };
     this.animE.override = { action: 'rest', pose: 'rest', ...this.cornerSeat('blue') };
     this.fx.setLook('broadcast');
+    this.hud.setSystem('INTERVAL', '次のラウンドのゲームシステムは…？', [['SPACE', 'スキップ']], false);
+    for (const st of this.stools) st.visible = true;
     document.getElementById('skipBtn').classList.remove('hidden');
     this.show.onInterval(this.round);
   }
@@ -602,7 +631,7 @@ export class BoxingMode {
     const P = this.core.player;
     const E = this.core.enemy;
     this.hud.setHP(P.hp / P.maxHp, E.hp / E.maxHp);
-    this.hud.setClock(this.phase === 'interval' ? 'INTERVAL' : this.clockText(), this.phase === 'fight' && ROUND_SEC - this.roundT < 10);
+    this.hud.setClock(this.phase === 'interval' ? 'REST' : this.clockText(), this.phase === 'fight' && ROUND_SEC - this.roundT < 10);
     // 相手のパンチの予告（システムが自分で出す時は出さない）
     const tell = this.core.tellProgress();
     const sys = this.systems.primary?.id;
@@ -622,6 +651,7 @@ export class BoxingMode {
     this.core.resetPositions();
     this.animP.override = { action: 'rest', pose: 'rest', ...this.cornerSeat('red') };
     this.animE.override = { action: 'idle', x: 0.9, z: 0.4, yaw: -Math.PI / 2 };
+    this.stools[0].visible = true;
     this.fx.setLook('broadcast');
   }
 
@@ -633,11 +663,15 @@ export class BoxingMode {
   // ---- 入場: 侍が花道を歩く → リングへ
   updateWalkin(dt) {
     const t = this.phaseT;
-    const walkX = -17 + Math.min(t, 8) * 1.5;
+    const walkX = -14.5 + Math.min(t, 8) * 1.3;
+    const fs = this.followSpot;
+    fs.intensity = t < 8 ? 9 : Math.max(0, fs.intensity - dt * 12);
     if (t < 8) {
       this.animP.override = { action: 'rest', pose: 'walk', x: walkX, z: 0, y: 0, yaw: Math.PI / 2 };
       this.animE.override = { action: 'idle', x: 1.4, z: 1.2, yaw: -2.3 };
-      this.rig.aim(new THREE.Vector3(walkX + 3.2, 1.9, 1.1), new THREE.Vector3(walkX, 1.55, 0), 42, 3, dt);
+      fs.position.set(walkX + 2, 11, 3);
+      fs.target.position.set(walkX, 0.8, 0);
+      this.rig.aim(new THREE.Vector3(walkX + 3.4, 1.5, 0.9), new THREE.Vector3(walkX, 1.4, 0), 42, 3, dt);
     } else if (t < 13) {
       if (!this.walkCut) {
         this.walkCut = true;
@@ -710,8 +744,9 @@ export class BoxingMode {
   render() {
     if (this.noRender) return;
     const size = this.renderer.getDrawingBufferSize(this._size ?? (this._size = new THREE.Vector2()));
-    this.field.update(this.rig.camera, size.y);
     this.renderer.info.reset();
+    this.show.renderJumbo();
+    this.field.update(this.rig.camera, size.y);
     if (this.show.renderOverride(size)) return;
     this.fx.render();
     this.show.renderExtras(size);

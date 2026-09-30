@@ -418,7 +418,7 @@ export class BoxingArena {
 
   buildLights() {
     const scene = this.scene;
-    scene.add(new THREE.HemisphereLight(0x8a96c8, 0x14121c, 0.55));
+    scene.add(new THREE.HemisphereLight(0x8a96c8, 0x14121c, 0.8));
     // リングを照らすスポット 2 つ（影はボクサーとレフェリーだけ）
     const key = new THREE.SpotLight(0xfff2e0, 4.2, 40, 0.55, 0.45, 0);
     key.position.set(-3.5, 12, -4);

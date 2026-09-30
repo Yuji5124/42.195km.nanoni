@@ -143,6 +143,7 @@ export class Replay {
     this.layoutCells();
     document.getElementById('rpInfo').textContent = `${kind} · ${n} VIEW${n > 1 ? 'S' : ''}`;
     this.el.classList.remove('hidden');
+    document.body.classList.add('replaying');
     this.m.P.bones.head.visible = true;
     this.m.audio.whoosh?.();
   }
@@ -164,6 +165,7 @@ export class Replay {
     if (!this.active) return;
     this.active = false;
     this.el.classList.add('hidden');
+    document.body.classList.remove('replaying');
     this.cellsEl.innerHTML = '';
     if (this.m.systems.primary?.id === 'fps') this.m.P.bones.head.visible = false;
     this.m.rig.cut();

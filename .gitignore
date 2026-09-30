@@ -3,3 +3,4 @@ dist/
 .DS_Store
 *.log
 trampoline/tools/out/
+boxing/tools/out/

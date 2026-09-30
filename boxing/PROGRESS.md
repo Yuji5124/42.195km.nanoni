@@ -6,20 +6,22 @@
 - タイトル画面の 6 枚目のカード: `src/core/Game.js` の `EXTERNAL.boxing` + `index.html` のカード（NEW はボクシングへ移動）+ `vite.config.js` の入力 `boxing`
 - `boxing/` は 800m / トランポリン / サッカーと同じ独立ページ（#from-main で「← タイトルへ」）
 - 観客は `soccer/src/crowd/CrowdField.js` / `CrowdDirector.js` / `NearCrowd.js` を再利用（アリーナ用の座席配置 `boxing/src/arena/ArenaLayout.js` が同じ形のデータを出す）
-- 画面効果は `src/fx/EffectManager.js`（DigitalShader: 8bit / 監視カメラ / 魚眼 / 縦動画）、音は `src/audio/AudioManager.js` + `soccer/src/audio/SoccerAudio.js`（群衆の声）
+- 画面効果は `src/fx/DigitalShader.js`（`boxing/src/view/BoxingFx.js` が 1 パスで使う）、音は `src/audio/AudioManager.js` + `soccer/src/audio/SoccerAudio.js`（群衆の声）+ `boxing/src/audio/BoxingAudio.js`
 - 入力はずっと A/D（←/→）・J・K・L・Space
 
 ## 進み具合
 - [x] カード・ページ・ビルドの配線
-- [ ] アリーナ（リング・ロープ・コーナー・リングサイド・吊り下げビジョン・観客）
-- [ ] ボクサー（関節モデル + 手続きポーズ + 腕の IK）
-- [ ] FightCore（HP・行動・AI・ダウン・判定）+ 普通の 3D で遊べる
-- [ ] ボクシングシステム 10 種以上 + SystemDirector（R1 時刻 / R2 慣れたら / FINAL 重ね）
-- [ ] HYPE・観客の反応・実況・情報パネルの増殖
-- [ ] リプレイ（2 → 4 → 8 → 16 分割）・TV / スマホの小窓
-- [ ] 入場・インターバル・FINAL・KO / 判定・結果
-- [ ] 音（ゴング・パンチ・群衆・リズム）
-- [ ] スモークテスト・スクリーンショット・README / ARCHITECTURE
+- [x] アリーナ（リング・ロープ・コーナー・リングサイド・吊り下げビジョン・観客 約 2 万人）
+- [x] ボクサー（関節モデル + 手続きポーズ + 腕の IK）・レフェリー
+- [x] FightCore（HP・行動・AI・ダウン・判定）+ 普通の 3D で遊べる
+- [x] ボクシングシステム 13 種 + SystemDirector（R1 時刻 / R2 慣れたら / R3 中継系 / FINAL 重ね → ??? → 3D）
+- [x] HYPE・観客の反応・実況（ドリフト）・情報パネルの増殖・テロップ・CM（L 字）
+- [x] リプレイ（1 → 2 → 4 → 8 → 16 分割）・小窓の中継・吊り下げビジョン
+- [x] 入場・インターバル・FINAL・KO / 判定・結果
+- [x] 音（ゴング・パンチ・群衆・リズム・8bit）
+- [x] スモークテスト（`node boxing/tools/smoke.mjs`）・システム一覧の撮影（`node boxing/tools/systems.mjs`）
+- [ ] README / ARCHITECTURE・package.json のスクリプト
+- [ ] 仕上げ（見た目・バランス・スマホ）
 
 ## 次にやること
-アリーナとボクサーと FightCore を作って、普通の 3D で 1 ラウンド遊べるようにする。
+README と boxing/ARCHITECTURE.md を書く → package.json に boxing:smoke / boxing:shot → 仕上げ（各システムの見た目の確認）→ コミット・push。

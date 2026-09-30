@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { POSE } from '../../../soccer/src/crowd/CrowdDirector.js';
 import { Particles } from '../../../src/fx/Particles.js';
-import { RING } from '../arena/BoxingArena.js';
+import { RING, JUMBO } from '../arena/BoxingArena.js';
 import { makeHaloTexture, SPONSORS } from '../arena/arenaTextures.js';
 import { Commentary } from './Commentary.js';
 import { Panels } from './Panels.js';
@@ -71,6 +71,7 @@ export class Show {
     this.balloons = new Particles(m.scene, { capacity: 160, additive: false });
     this.pipCam = new THREE.PerspectiveCamera(30, 16 / 9, 0.05, 400);
     this.pipCam.layers.enable(1);
+    this.buildJumbo();
     this.pipEl = document.createElement('div');
     this.pipEl.className = 'pip hidden';
     this.pipEl.innerHTML = '<em>NNN 中継 · LIVE</em>';
@@ -88,6 +89,45 @@ export class Show {
     this.blue = L.blocks.filter((b) => z[b.index] === 1).map((b) => b.index);
     this.cheer = L.blocks.filter((b) => z[b.index] === 2).map((b) => b.index);
     this.all = L.blocks.map((b) => b.index);
+  }
+
+  // 吊り下げビジョン: 中継カメラの映像を小さな描画先に 3 フレームに 1 回（4 面とも同じ映像）
+  buildJumbo() {
+    this.jumboRT = new THREE.WebGLRenderTarget(448, 262, { samples: 0 });
+    this.jumboRT.texture.colorSpace = THREE.SRGBColorSpace;
+    this.jumboCam = new THREE.PerspectiveCamera(26, JUMBO.w / JUMBO.h, 0.1, 400);
+    this.jumboCam.layers.enable(1);
+    const mat = new THREE.MeshBasicMaterial({ map: this.jumboRT.texture, toneMapped: true });
+    mat.color.setScalar(1.15);
+    this.jumboScreens = this.m.arena.jumboFaces.map((holder) => {
+      const sc = new THREE.Mesh(new THREE.PlaneGeometry(JUMBO.w, JUMBO.h), mat);
+      holder.add(sc);
+      return sc;
+    });
+    this.jumboFrame = 0;
+  }
+
+  renderJumbo() {
+    const m = this.m;
+    if (m.noRender || m.gov.q.name === 'VERY LOW') return;
+    this.jumboFrame++;
+    if (this.jumboFrame % 3 !== 0) return;
+    const P = m.core.player;
+    const E = m.core.enemy;
+    const mx = (P.x + E.x) / 2;
+    const mz = (P.z + E.z) / 2;
+    const a = m.time * 0.05;
+    const cam = this.jumboCam;
+    // 中継の寄り（ゆっくり回る）
+    cam.position.set(mx + Math.cos(a) * 5.5, Y + 2.2, mz + Math.sin(a) * 5.5);
+    cam.lookAt(mx, Y + 1.25, mz);
+    const r = m.renderer;
+    for (const sc of this.jumboScreens) sc.visible = false;
+    m.field.uniforms.uPxScale.value = this.jumboRT.height / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2));
+    r.setRenderTarget(this.jumboRT);
+    r.render(m.scene, cam);
+    r.setRenderTarget(null);
+    for (const sc of this.jumboScreens) sc.visible = true;
   }
 
   // 観客のスマホのフラッシュ（1 draw call の点。盛り上がるほど多い）

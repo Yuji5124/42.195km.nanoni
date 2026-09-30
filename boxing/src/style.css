@@ -535,7 +535,7 @@ body.lshape #game {
   white-space: nowrap;
 }
 .cm .cm-b span {
-  animation: ticker 14s linear infinite;
+  animation: tickerIn 20s linear infinite;
 }
 .cm .cm-brand {
   font-family: var(--font-jp);
@@ -557,6 +557,14 @@ body.lshape #game {
   color: #000;
   font-size: 11px;
   font-weight: 700;
+}
+@keyframes tickerIn {
+  from {
+    transform: translateX(30vw);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }
 @keyframes ticker {
   from {
@@ -969,7 +977,7 @@ body[data-sys='slow'] .fightbar {
 .ov-8bit .up {
   position: absolute;
   left: 50%;
-  top: calc(var(--safe-t) + 58px);
+  top: calc(var(--safe-t) + 136px);
   transform: translateX(-50%);
   font-family: var(--font-dot);
   font-size: 16px;
@@ -1026,7 +1034,7 @@ body[data-sys='slow'] .fightbar {
 }
 .ov-tv .ticker span {
   display: inline-block;
-  animation: ticker 26s linear infinite;
+  animation: tickerIn 30s linear infinite;
 }
 .ov-tv .cam {
   position: absolute;
@@ -1228,7 +1236,7 @@ body[data-sys='phone'] .keys {
   background: radial-gradient(ellipse at 50% 30%, rgba(80, 10, 30, 0.45), rgba(3, 4, 12, 0.9));
 }
 .intro-wrap {
-  width: min(92vw, 660px);
+  width: min(92vw, 860px);
   text-align: center;
 }
 .i-live {
@@ -1243,7 +1251,7 @@ body[data-sys='phone'] .keys {
   margin: 18px 0 8px;
   font-family: var(--font-jp);
   font-weight: 400;
-  font-size: clamp(30px, 8.6vw, 84px);
+  font-size: clamp(28px, 7.6vw, 80px);
   line-height: 1.1;
   white-space: nowrap;
 }
@@ -1554,4 +1562,17 @@ body[data-phase='interval'] .mute-btn {
   font-weight: 700;
   letter-spacing: 0.12em;
   white-space: nowrap;
+}
+
+/* リプレイ中は HUD を隠す（分割画面だけ） */
+body.replaying .hud,
+body.replaying .sys-layer,
+body.replaying .pip,
+body.replaying .tell-mark,
+body.replaying .talk {
+  display: none !important;
+}
+
+body[data-phase='interval'] .skip-btn {
+  bottom: calc(var(--safe-b) + 132px);
 }
