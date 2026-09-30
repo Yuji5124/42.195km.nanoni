@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ボクサー（とレフェリー）の関節モデル。人間らしい体型・真剣な顔。変形や変顔で笑いを取らない。
 //
 //   骨: root（床）→ hips → spine → chest → neck → head / chest → 肩 → 上腕 → 前腕（→ グローブ）/ hips → 太腿 → 脛 → 足
-//   骨ごとにパーツ（円柱・球・箱）を 1 つのジオメトリに結合（頂点カラー）+ フラットシェーディング = 高品質なローポリ
+//   骨ごとにパーツ（筋肉の輪郭の回転体・球）を 1 つのジオメトリに結合（頂点カラー）。なめらかな陰影、関節は丸いふたで重なる
 //   腕と脚は 2 ボーン IK: グローブの目標点・足の置き場所を与えると肩・肘・膝が決まる（closed-chain-ik の考え方の最小版）
 //
 // 座標（モデルの中）: +Z = 前、+X = 本人の左、+Y = 上。root は足元。
@@ -41,7 +41,7 @@ const _z = new THREE.Vector3();
 
 function part(geo, color, { p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1] } = {}) {
   let g = geo.index ? geo.toNonIndexed() : geo;
-  g.deleteAttribute('uv');
+  if (g.attributes.uv) g.deleteAttribute('uv');
   _m.compose(_p.set(...p), _q.setFromEuler(_e.set(...r)), _s.set(...s));
   g.applyMatrix4(_m);
   const c = new THREE.Color(color);
@@ -55,10 +55,45 @@ function part(geo, color, { p = [0, 0, 0], r = [0, 0, 0], s = [1, 1, 1] } = {}) 
   g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
   return g;
 }
-const cyl = (rt, rb, h, seg = 10) => new THREE.CylinderGeometry(rt, rb, h, seg, 1);
-const sph = (r, w = 12, h = 9) => new THREE.SphereGeometry(r, w, h);
+// なめらかな曲面（分割を多めに・フラットにしない）
+const cyl = (rt, rb, h, seg = 20) => new THREE.CylinderGeometry(rt, rb, h, seg, 1);
+const sph = (r, w = 22, h = 16, ...rest) => new THREE.SphereGeometry(r, w, h, ...rest);
 const box = (w, h, d) => new THREE.BoxGeometry(w, h, d);
-const limb = (rt, rb, len, seg = 10) => cyl(rt, rb, len, seg).translate(0, -len / 2, 0);
+
+// 筋肉の形の回転体（骨に沿って -Y 方向・長さ len）。両端は丸いふた = 関節で隣の部位と丸く重なる（折れ目が見えない）
+//   prof: [[t, r], ...]（t = 0 が付け根、1 が先端）
+function lathe(len, prof, { seg = 20, capTop = true, capBottom = true } = {}) {
+  const pts = [];
+  const rAt = (t) => {
+    for (let i = 0; i < prof.length - 1; i++) {
+      const [t0, r0] = prof[i];
+      const [t1, r1] = prof[i + 1];
+      if (t >= t0 && t <= t1) {
+        const k = (t - t0) / Math.max(1e-6, t1 - t0);
+        const e = k * k * (3 - 2 * k);
+        return r0 + (r1 - r0) * e;
+      }
+    }
+    return prof[prof.length - 1][1];
+  };
+  const rb = prof[prof.length - 1][1];
+  const rt = prof[0][1];
+  // 先端のふた（下）
+  if (capBottom) for (let i = 0; i <= 5; i++) {
+    const a = (i / 5) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(Math.max(1e-4, Math.sin(a) * rb), -len - Math.cos(a) * rb * 0.85));
+  }
+  for (let i = 1; i < 14; i++) {
+    const t = 1 - i / 14;
+    pts.push(new THREE.Vector2(rAt(t), -len * t));
+  }
+  // 付け根のふた（上）
+  if (capTop) for (let i = 0; i <= 5; i++) {
+    const a = (i / 5) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(Math.max(1e-4, Math.cos(a) * rt), Math.sin(a) * rt * 0.85));
+  }
+  return new THREE.LatheGeometry(pts, seg);
+}
 
 // 見た目の種類
 export const LOOKS = {
@@ -67,6 +102,19 @@ export const LOOKS = {
   // 青コーナー: 王者。短い髪・青と白のトランクス
   champion: { skin: 0x9b6a4a, hair: 0x100c0c, trunks: 0x1d3fb5, trunks2: 0x122a80, band: 0xf2f2f2, glove: 0x1d3fb5, boot: 0xe8e8ee, sock: 0xe8e8ee, tape: 0xf4f1e8, style: 'buzz', headband: false },
   referee: { skin: 0xd9a47c, hair: 0x9a9aa0, shirt: 0xf4f4f6, pants: 0x121218, shoe: 0x0a0a0c, tie: 0x0a0a0c, style: 'short', official: true },
+  // 撮影スタッフ（ハプニング用）: 黒い服・肩にカメラ
+  staff: { skin: 0xc99672, hair: 0x2a1c14, shirt: 0x17171d, pants: 0x17171d, shoe: 0x0a0a0c, tie: 0x17171d, style: 'short', official: true, camera: true },
+};
+
+// 部位の形（筋肉の輪郭）
+const PROF = {
+  upper: [[0, 0.064], [0.22, 0.068], [0.5, 0.061], [0.82, 0.05], [1, 0.047]],
+  fore: [[0, 0.05], [0.2, 0.055], [0.55, 0.046], [1, 0.037]],
+  thigh: [[0, 0.098], [0.3, 0.092], [0.7, 0.074], [1, 0.062]],
+  shin: [[0, 0.06], [0.22, 0.064], [0.55, 0.05], [1, 0.04]],
+  sleeve: [[0, 0.075], [1, 0.07]],
+  pantsT: [[0, 0.1], [1, 0.078]],
+  pantsS: [[0, 0.078], [1, 0.064]],
 };
 
 export class BoxerModel {
@@ -74,7 +122,7 @@ export class BoxerModel {
     this.look = LOOKS[lookName];
     this.official = !!this.look.official;
     this.root = new THREE.Group();
-    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.02, flatShading: true });
+    this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.02 });
     this.bones = {};
     this.build();
     this.root.traverse((o) => {
@@ -111,97 +159,118 @@ export class BoxerModel {
     const neck = this.bone('neck', chest, [0, D.neck, 0]);
     const head = this.bone('head', neck, [0, D.head, 0.01]);
 
-    // 腰（トランクス / ズボン）
+    // 腰（トランクス / ズボン）: 丸みのある回転体
     const lower = off ? L.pants : L.trunks;
+    const trunks = new THREE.LatheGeometry(
+      [[0.0001, -0.2], [0.14, -0.2], [0.178, -0.14], [0.186, -0.04], [0.176, 0.06], [0.168, 0.12], [0.0001, 0.13]].map(([x, y]) => new THREE.Vector2(x, y)),
+      24
+    );
     this.mesh(hips, [
-      part(cyl(0.165, 0.18, 0.24), lower, { p: [0, -0.04, 0], s: [1, 1, 0.74] }),
-      part(cyl(0.168, 0.168, off ? 0.04 : 0.075), off ? 0x050507 : L.band, { p: [0, 0.1, 0], s: [1, 1, 0.76] }),
-      ...(off ? [] : [part(box(0.012, 0.2, 0.01), L.band, { p: [0.12, -0.04, 0.125] }), part(box(0.012, 0.2, 0.01), L.band, { p: [-0.12, -0.04, 0.125] })]),
+      part(trunks, lower, { s: [1, 1, 0.76] }),
+      part(cyl(0.171, 0.171, off ? 0.035 : 0.07, 24), off ? 0x050507 : L.band, { p: [0, 0.1, 0], s: [1, 1, 0.78] }),
+      ...(off ? [] : [part(box(0.012, 0.2, 0.01), L.band, { p: [0.125, -0.05, 0.128] }), part(box(0.012, 0.2, 0.01), L.band, { p: [-0.125, -0.05, 0.128] })]),
     ]);
-    // 腹
+    // 腹（腰から胸へ細く → 太く）
     const torso = off ? L.shirt : skin;
-    this.mesh(spine, [part(cyl(0.148, 0.16, 0.24), torso, { p: [0, 0.1, 0.005], s: [1, 1, 0.7] })]);
-    // 胸・肩まわり（胸筋・僧帽筋）
-    const chestParts = [
-      part(cyl(0.205, 0.155, 0.3), torso, { p: [0, 0.12, 0.0], s: [1, 1, 0.64] }),
-      part(box(0.3, 0.07, 0.16), torso, { p: [0, 0.26, -0.01] }),
-    ];
+    const abd = new THREE.LatheGeometry([[0.158, -0.02], [0.15, 0.08], [0.152, 0.16], [0.162, 0.24]].map(([x, y]) => new THREE.Vector2(x, y)), 24);
+    this.mesh(spine, [part(abd, torso, { s: [1, 1, 0.7] })]);
+    // 胸（逆三角形）+ 肩（三角筋）+ 僧帽筋
+    const chestG = new THREE.LatheGeometry(
+      [[0.158, -0.03], [0.18, 0.06], [0.205, 0.16], [0.198, 0.24], [0.15, 0.3], [0.07, 0.33], [0.0001, 0.335]].map(([x, y]) => new THREE.Vector2(x, y)),
+      24
+    );
+    const chestParts = [part(chestG, torso, { s: [1, 1, 0.64] })];
+    for (const side of [1, -1]) chestParts.push(part(sph(0.078), torso, { p: [side * 0.2, 0.19, -0.005], s: [1.05, 0.95, 1.05] }));
+    chestParts.push(part(sph(0.1, 20, 12), torso, { p: [0, 0.27, -0.03], s: [1.5, 0.45, 0.8] }));
     if (!off) {
-      const pec = new THREE.Color(skin).multiplyScalar(0.93).getHex();
-      chestParts.push(part(sph(0.085, 10, 7), pec, { p: [0.075, 0.16, 0.085], s: [1.15, 0.8, 0.55] }));
-      chestParts.push(part(sph(0.085, 10, 7), pec, { p: [-0.075, 0.16, 0.085], s: [1.15, 0.8, 0.55] }));
+      const pec = new THREE.Color(skin).multiplyScalar(0.95).getHex();
+      chestParts.push(part(sph(0.085), pec, { p: [0.072, 0.17, 0.08], s: [1.15, 0.78, 0.5] }));
+      chestParts.push(part(sph(0.085), pec, { p: [-0.072, 0.17, 0.08], s: [1.15, 0.78, 0.5] }));
     } else {
-      chestParts.push(part(box(0.06, 0.04, 0.02), L.tie, { p: [0, 0.27, 0.12] }));
+      chestParts.push(part(box(0.05, 0.035, 0.02), L.tie, { p: [0, 0.28, 0.12] }));
     }
     this.mesh(chest, chestParts);
-    this.mesh(neck, [part(cyl(0.062, 0.07, 0.13), skin, { p: [0, 0.03, 0] })]);
+    this.mesh(neck, [part(lathe(0.12, [[0, 0.064], [1, 0.07]], { seg: 18 }), skin, { p: [0, 0.1, 0] })]);
 
     // 頭: 真剣な顔（眉はまっすぐ・口は結ぶ）
     const hp = [
-      part(sph(0.104, 14, 11), skin, { p: [0, 0.1, 0], s: [0.96, 1.14, 1.06] }),
-      part(box(0.13, 0.07, 0.1), skin, { p: [0, 0.035, 0.035] }),
-      part(sph(0.025, 6, 5), skin, { p: [0.101, 0.1, -0.005], s: [0.5, 1, 0.8] }),
-      part(sph(0.025, 6, 5), skin, { p: [-0.101, 0.1, -0.005], s: [0.5, 1, 0.8] }),
-      part(box(0.03, 0.012, 0.012), 0x120d10, { p: [0.038, 0.118, 0.1] }),
-      part(box(0.03, 0.012, 0.012), 0x120d10, { p: [-0.038, 0.118, 0.1] }),
-      part(box(0.042, 0.011, 0.012), L.hair, { p: [0.04, 0.142, 0.1], r: [0, 0, -0.08] }),
-      part(box(0.042, 0.011, 0.012), L.hair, { p: [-0.04, 0.142, 0.1], r: [0, 0, 0.08] }),
-      part(box(0.022, 0.04, 0.03), new THREE.Color(skin).multiplyScalar(0.9).getHex(), { p: [0, 0.09, 0.112] }),
-      part(box(0.04, 0.008, 0.01), 0x6a2a2a, { p: [0, 0.048, 0.1] }),
+      part(sph(0.104, 28, 20), skin, { p: [0, 0.1, 0], s: [0.95, 1.13, 1.06] }),
+      part(sph(0.07, 20, 14), skin, { p: [0, 0.05, 0.03], s: [1.05, 0.8, 0.95] }),
+      part(sph(0.025, 10, 8), skin, { p: [0.1, 0.1, -0.005], s: [0.5, 1, 0.8] }),
+      part(sph(0.025, 10, 8), skin, { p: [-0.1, 0.1, -0.005], s: [0.5, 1, 0.8] }),
+      part(sph(0.011, 8, 6), 0x120d10, { p: [0.037, 0.118, 0.1], s: [1.4, 0.8, 0.6] }),
+      part(sph(0.011, 8, 6), 0x120d10, { p: [-0.037, 0.118, 0.1], s: [1.4, 0.8, 0.6] }),
+      part(box(0.042, 0.011, 0.012), L.hair, { p: [0.04, 0.142, 0.099], r: [0, 0, -0.06] }),
+      part(box(0.042, 0.011, 0.012), L.hair, { p: [-0.04, 0.142, 0.099], r: [0, 0, 0.06] }),
+      part(sph(0.018, 10, 8), new THREE.Color(skin).multiplyScalar(0.92).getHex(), { p: [0, 0.088, 0.11], s: [0.9, 1.4, 1] }),
+      part(box(0.038, 0.007, 0.01), 0x6a2a2a, { p: [0, 0.05, 0.098] }),
     ];
     if (L.style === 'topknot') {
-      hp.push(part(sph(0.109, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), L.hair, { p: [0, 0.112, -0.004], s: [1, 1.12, 1.08] }));
-      hp.push(part(sph(0.036, 8, 6), L.hair, { p: [0, 0.2, -0.085] }));
-      hp.push(part(cyl(0.015, 0.02, 0.07, 6), L.hair, { p: [0, 0.2, -0.13], r: [1.2, 0, 0] }));
+      hp.push(part(sph(0.109, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), L.hair, { p: [0, 0.112, -0.004], s: [1, 1.12, 1.08] }));
+      hp.push(part(sph(0.036, 14, 10), L.hair, { p: [0, 0.2, -0.085] }));
+      hp.push(part(cyl(0.015, 0.02, 0.07, 10), L.hair, { p: [0, 0.2, -0.13], r: [1.2, 0, 0] }));
     } else if (L.style === 'buzz') {
-      hp.push(part(sph(0.107, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.48), L.hair, { p: [0, 0.11, -0.002], s: [1, 1.1, 1.07] }));
+      hp.push(part(sph(0.107, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.48), L.hair, { p: [0, 0.11, -0.002], s: [1, 1.1, 1.07] }));
     } else {
-      hp.push(part(sph(0.108, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.42), L.hair, { p: [0, 0.112, -0.012], s: [1, 1.1, 1.06] }));
+      hp.push(part(sph(0.108, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.42), L.hair, { p: [0, 0.112, -0.012], s: [1, 1.1, 1.06] }));
     }
     if (L.headband) {
-      hp.push(part(cyl(0.113, 0.113, 0.03, 16), 0xf6f4ee, { p: [0, 0.155, 0.002], s: [0.97, 1, 1.08] }));
+      hp.push(part(cyl(0.113, 0.113, 0.03, 28), 0xf6f4ee, { p: [0, 0.155, 0.002], s: [0.97, 1, 1.08] }));
       hp.push(part(box(0.025, 0.12, 0.012), 0xf6f4ee, { p: [0.02, 0.1, -0.12], r: [0.3, 0, 0.25] }));
       hp.push(part(box(0.025, 0.1, 0.012), 0xf6f4ee, { p: [-0.02, 0.1, -0.12], r: [0.35, 0, -0.2] }));
-      hp.push(part(sph(0.015, 6, 4), 0xc3182e, { p: [0, 0.16, 0.112] }));
+      hp.push(part(sph(0.015, 10, 8), 0xc3182e, { p: [0, 0.16, 0.112] }));
     }
     this.mesh(head, hp);
 
-    // 腕
+    // 腕（上腕・前腕とも両端が丸い = 肘で丸く重なる）
     for (const side of [1, -1]) {
       const n = side > 0 ? 'L' : 'R';
       const sh = this.bone(`shoulder${n}`, chest, [side * D.shoulderX, D.shoulderY, -0.01]);
       const up = this.bone(`upper${n}`, sh, [0, 0, 0]);
       const fore = this.bone(`fore${n}`, up, [0, -D.upper, 0]);
       const hand = this.bone(`hand${n}`, fore, [0, -D.fore, 0]);
-      const sleeve = off ? L.shirt : skin;
-      this.mesh(up, [part(sph(0.078, 10, 8), sleeve, { p: [side * 0.01, -0.01, 0], s: [1.05, 1, 1] }), part(limb(0.06, 0.05, D.upper), off ? skin : skin, { p: [0, 0, 0] }), ...(off ? [part(limb(0.07, 0.065, 0.12), L.shirt, {})] : [])]);
-      this.mesh(fore, [part(limb(0.052, 0.042, D.fore), skin, {}), ...(off ? [] : [part(cyl(0.046, 0.046, 0.05), L.tape, { p: [0, -D.fore + 0.03, 0] })])]);
       if (off) {
-        this.mesh(hand, [part(sph(0.045, 8, 6), skin, { p: [0, -0.04, 0], s: [0.8, 1.2, 0.6] })]);
+        this.mesh(up, [part(lathe(0.13, PROF.sleeve), L.shirt, {}), part(lathe(D.upper, PROF.upper), skin, { s: [0.92, 1, 0.92] })]);
+        this.mesh(fore, [part(lathe(D.fore, PROF.fore), skin, {})]);
+        this.mesh(hand, [part(sph(0.045, 14, 10), skin, { p: [0, -0.04, 0], s: [0.8, 1.2, 0.6] })]);
       } else {
+        this.mesh(up, [part(lathe(D.upper, PROF.upper), skin, {})]);
+        this.mesh(fore, [part(lathe(D.fore, PROF.fore), skin, {}), part(cyl(0.044, 0.044, 0.05, 18), L.tape, { p: [0, -D.fore + 0.03, 0] })]);
         // グローブ: 拳（丸み）+ 親指 + 袖口 + 白いライン
         this.mesh(hand, [
-          part(sph(0.1, 14, 10), L.glove, { p: [0, -0.07, 0.012], s: [0.96, 1.18, 1.06] }),
-          part(sph(0.042, 8, 6), L.glove, { p: [side * -0.07, -0.05, 0.05], s: [0.9, 1.3, 0.9] }),
-          part(cyl(0.06, 0.066, 0.11, 12), L.glove, { p: [0, 0.04, 0] }),
-          part(cyl(0.067, 0.067, 0.02, 12), 0xf2f2f2, { p: [0, 0.07, 0] }),
+          part(sph(0.1, 26, 18), L.glove, { p: [0, -0.07, 0.012], s: [0.96, 1.18, 1.06] }),
+          part(sph(0.042, 14, 10), L.glove, { p: [side * -0.07, -0.05, 0.05], s: [0.9, 1.3, 0.9] }),
+          part(cyl(0.06, 0.068, 0.11, 22), L.glove, { p: [0, 0.04, 0] }),
+          part(cyl(0.069, 0.069, 0.02, 22), 0xf2f2f2, { p: [0, 0.07, 0] }),
         ]);
       }
     }
-    // 脚
+    // 撮影スタッフ: 右肩にカメラ
+    if (L.camera) {
+      this.mesh(chest, [
+        part(box(0.2, 0.22, 0.46), 0x6a6e7a, { p: [-0.22, 0.38, 0.06] }),
+        part(cyl(0.075, 0.08, 0.16, 18), 0x14141a, { p: [-0.22, 0.38, 0.36], r: [Math.PI / 2, 0, 0] }),
+        part(cyl(0.082, 0.082, 0.02, 18), 0xd8dbe2, { p: [-0.22, 0.38, 0.44], r: [Math.PI / 2, 0, 0] }),
+        part(box(0.05, 0.05, 0.3), 0x2a2c34, { p: [-0.22, 0.52, 0.04] }),
+        part(sph(0.022, 10, 8), 0xff2030, { p: [-0.12, 0.47, 0.25] }),
+      ]);
+    }
+    // 脚（太腿・脛とも両端が丸い = 膝で丸く重なる）
     for (const side of [1, -1]) {
       const n = side > 0 ? 'L' : 'R';
       const th = this.bone(`thigh${n}`, hips, [side * D.hipX, -0.05, 0]);
       const sh = this.bone(`shin${n}`, th, [0, -D.thigh, 0]);
       const ft = this.bone(`foot${n}`, sh, [0, -D.shin, 0]);
+      const foot = new THREE.CapsuleGeometry(0.048, 0.16, 6, 14);
+      foot.rotateX(Math.PI / 2);
       if (off) {
-        this.mesh(th, [part(limb(0.09, 0.07, D.thigh), L.pants, {})]);
-        this.mesh(sh, [part(limb(0.065, 0.055, D.shin), L.pants, {})]);
-        this.mesh(ft, [part(box(0.1, 0.07, 0.26), L.shoe, { p: [0, -D.ankle + 0.035, 0.05] })]);
+        this.mesh(th, [part(lathe(D.thigh, PROF.pantsT), L.pants, {})]);
+        this.mesh(sh, [part(lathe(D.shin, PROF.pantsS), L.pants, {})]);
+        this.mesh(ft, [part(foot, L.shoe, { p: [0, -D.ankle + 0.045, 0.05], s: [1.05, 0.85, 1] })]);
       } else {
-        this.mesh(th, [part(limb(0.1, 0.092, 0.2), L.trunks, {}), part(limb(0.086, 0.066, D.thigh), L.skin, {}), part(box(0.012, 0.18, 0.01), L.band, { p: [side * 0.095, -0.1, 0] })]);
-        this.mesh(sh, [part(limb(0.06, 0.045, D.shin), L.skin, {}), part(cyl(0.05, 0.05, 0.08), L.sock, { p: [0, -D.shin + 0.2, 0] }), part(cyl(0.058, 0.052, 0.16), L.boot, { p: [0, -D.shin + 0.08, 0] })]);
-        this.mesh(ft, [part(box(0.1, 0.075, 0.25), L.boot, { p: [0, -D.ankle + 0.04, 0.05] }), part(box(0.104, 0.018, 0.255), 0xf2f2f2, { p: [0, -D.ankle + 0.005, 0.05] })]);
+        this.mesh(th, [part(lathe(0.2, [[0, 0.104], [1, 0.096]], { capBottom: false }), L.trunks, {}), part(lathe(D.thigh, PROF.thigh), L.skin, {}), part(box(0.012, 0.18, 0.01), L.band, { p: [side * 0.1, -0.1, 0] })]);
+        this.mesh(sh, [part(lathe(D.shin, PROF.shin), L.skin, {}), part(cyl(0.052, 0.052, 0.07, 20), L.sock, { p: [0, -D.shin + 0.2, 0] }), part(cyl(0.06, 0.054, 0.17, 20), L.boot, { p: [0, -D.shin + 0.08, 0] })]);
+        this.mesh(ft, [part(foot, L.boot, { p: [0, -D.ankle + 0.048, 0.05], s: [1.05, 0.9, 1] }), part(box(0.1, 0.014, 0.25), 0xf2f2f2, { p: [0, -D.ankle + 0.007, 0.05] })]);
       }
     }
   }

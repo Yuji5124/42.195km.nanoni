@@ -20,14 +20,51 @@ const smooth = (t) => {
 };
 const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
+// 構え: 肘は体の横にしまう（外に張らない）・膝は軽く曲げるだけ
 const STANCE = {
-  footL: [0.13, 0, 0.2],
-  footR: [-0.15, 0, -0.2],
-  gloveL: [0.08, 1.45, 0.3],
-  gloveR: [-0.07, 1.41, 0.15],
-  elbowL: [0.42, 0.95, -0.15],
-  elbowR: [-0.42, 0.95, -0.25],
+  footL: [0.12, 0, 0.19],
+  footR: [-0.14, 0, -0.19],
+  gloveL: [0.08, 1.46, 0.3],
+  gloveR: [-0.07, 1.42, 0.16],
+  elbowL: [0.27, 1.02, -0.04],
+  elbowR: [-0.27, 1.0, -0.08],
 };
+
+// ポーズのなめらかさ: 目標のポーズへ毎フレーム指数的に近づける（関節ごとの速さ）。
+// パンチの拳だけは速く（キレを残す）、体幹はゆっくり（重さ）。
+const VEC_KEYS = ['hipRot', 'spine', 'chest', 'head', 'footL', 'footR', 'gloveL', 'gloveR', 'elbowL', 'elbowR', 'kneeL', 'kneeR'];
+const SCALAR_KEYS = ['hipY', 'hipX', 'hipZ', 'heelL', 'heelR', 'toeL', 'toeR'];
+const RATE = { hipRot: 13, spine: 12, chest: 12, head: 14, footL: 22, footR: 22, gloveL: 20, gloveR: 20, elbowL: 16, elbowR: 16, kneeL: 16, kneeR: 16, hipY: 12, hipX: 12, hipZ: 12, heelL: 16, heelR: 16, toeL: 12, toeR: 12 };
+
+export function smoothPose(state, P, dt, { fast = null, snap = false } = {}) {
+  let sm = state.sm;
+  if (!sm || snap || Math.hypot((sm.x ?? 0) - P.x, (sm.z ?? 0) - P.z) > 0.8) {
+    sm = state.sm = { ...P };
+    for (const k of VEC_KEYS) sm[k] = [...(P[k] ?? [0, 0, 0])];
+    return sm;
+  }
+  for (const k of SCALAR_KEYS) {
+    const a = 1 - Math.exp(-RATE[k] * dt);
+    sm[k] = (sm[k] ?? 0) + ((P[k] ?? 0) - (sm[k] ?? 0)) * a;
+  }
+  for (const k of VEC_KEYS) {
+    const rate = fast && fast[k] ? fast[k] : RATE[k];
+    const a = 1 - Math.exp(-rate * dt);
+    const t = P[k] ?? [0, 0, 0];
+    const v = sm[k];
+    v[0] += (t[0] - v[0]) * a;
+    v[1] += (t[1] - v[1]) * a;
+    v[2] += (t[2] - v[2]) * a;
+  }
+  sm.x = P.x;
+  sm.z = P.z;
+  sm.y = P.y;
+  // 向きは回り込み（±π）に注意して近づける
+  let dy = P.yaw - (sm.yaw ?? P.yaw);
+  dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  sm.yaw = (sm.yaw ?? P.yaw) + dy * (1 - Math.exp(-18 * dt));
+  return sm;
+}
 
 export class BoxerAnimator {
   constructor(model, fighter) {
@@ -73,8 +110,8 @@ export class BoxerAnimator {
     P.yaw = this.override?.yaw ?? f.yaw;
 
     // ---- 構え（基本）
-    const bounce = Math.sin(t * 2 * Math.PI * 1.9) * 0.014;
-    let hipY = 0.9 + bounce;
+    const bounce = Math.sin(t * 2 * Math.PI * 1.9) * 0.012;
+    let hipY = 0.935 + bounce;
     let hipX = 0;
     let hipZ = 0;
     const hipRot = [0.06, -0.38, 0];
@@ -278,11 +315,19 @@ export class BoxerAnimator {
       heelR = 0;
     }
 
-    Object.assign(P, { hipY, hipX, hipZ, hipRot, spine, chest, head, footL, footR, heelL, heelR, gloveL, gloveR, elbowL, elbowR });
-    P.kneeL = [footL[0] * 1.3 + 0.05, 0.55, footL[2] + 0.6];
-    P.kneeR = [footR[0] * 1.3 - 0.05, 0.55, footR[2] + 0.6];
+    // つま先は腰の向きに少しそろえる（半身の構え）。膝はつま先の方向へ曲げる
+    const blade = o?.pose ? 0 : 1 - this.down;
+    const toeL = -0.28 * blade;
+    const toeR = -0.62 * blade;
+    Object.assign(P, { hipY, hipX, hipZ, hipRot, spine, chest, head, footL, footR, heelL, heelR, gloveL, gloveR, elbowL, elbowR, toeL, toeR });
+    P.kneeL = [footL[0] + Math.sin(toeL) * 0.6 + 0.03, 0.55, footL[2] + Math.cos(toeL) * 0.6];
+    P.kneeR = [footR[0] + Math.sin(toeR) * 0.6 - 0.03, 0.55, footR[2] + Math.cos(toeR) * 0.6];
     if (this.down > 0.5) P.kneeR = [-0.13, -0.2, 0.4];
-    this.model.apply(P);
+    // なめらかにしてから当てる（パンチの拳だけ速く）
+    const punching = act === 'punch' && f.punch ? PUNCHES[f.punch.type].hand : null;
+    const fast = punching ? { [`glove${punching}`]: 42, [`elbow${punching}`]: 30, hipRot: 20, chest: 20 } : act === 'hit' ? { head: 26, chest: 20 } : null;
+    this.model.apply(smoothPose(this, P, dt, { fast, snap: this.snapNext }));
+    this.snapNext = false;
   }
 }
 
@@ -372,6 +417,6 @@ export class RefereeAnimator {
     }
     P.kneeL = [P.footL[0] * 1.3, 0.55, P.footL[2] + 0.6];
     P.kneeR = [P.footR[0] * 1.3, 0.55, P.footR[2] + 0.6];
-    this.model.apply(P);
+    this.model.apply(smoothPose(this, P, dt));
   }
 }

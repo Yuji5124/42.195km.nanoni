@@ -603,7 +603,9 @@ export class BoxingMode {
     this.animR.update(dtA, { px: Pf.x, pz: Pf.z, ex: Ef.x, ez: Ef.z, down: d ? { x: d.f.x, z: d.f.z } : null, count: d ? d.t - 0.8 : 0, raise });
 
     // カメラ
-    if (this.phase === 'fight' || this.phase === 'ready' || this.phase === 'roundEnd') {
+    if (this.show.happen.camera(this.rig, dt)) {
+      // ハプニング: カメラがよそを映している
+    } else if (this.phase === 'fight' || this.phase === 'ready' || this.phase === 'roundEnd') {
       if (this.systems.primary) this.systems.camera(this.rig, dt);
     } else if (this.phase === 'interval') this.cameraInterval(dt);
     else if (this.phase === 'finish') this.cameraFinish(dt);
@@ -635,11 +637,11 @@ export class BoxingMode {
     const P = this.core.player;
     const E = this.core.enemy;
     this.hud.setHP(P.hp / P.maxHp, E.hp / E.maxHp);
-    this.hud.setClock(this.phase === 'interval' ? 'REST' : this.clockText(), this.phase === 'fight' && ROUND_SEC - this.roundT < 10);
+    this.hud.setClock(this.phase === 'interval' ? 'REST' : this.show.happen.clockText ?? this.clockText(), this.phase === 'fight' && ROUND_SEC - this.roundT < 10);
     // 相手のパンチの予告（システムが自分で出す時は出さない）
     const tell = this.core.tellProgress();
     const sys = this.systems.primary?.id;
-    const on = this.phase === 'fight' && tell && E.action === 'tell' && sys !== 'qte' && sys !== 'top' && !this.downState;
+    const on = this.phase === 'fight' && tell && E.action === 'tell' && sys !== 'qte' && sys !== 'top' && !this.downState && this.show.happen.camHold <= 0;
     if (on) {
       const v = this.E.gloveWorld(this.animE.tellHand ?? 'R', this._g ?? (this._g = new THREE.Vector3()));
       v.project(this.rig.camera);
