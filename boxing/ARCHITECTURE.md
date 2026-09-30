@@ -1,0 +1,112 @@
+# ボクシング、なのに。 — 設計メモ
+
+> 試合はちゃんとしてる。ゲームがちゃんとしてない。
+
+タイトル画面の 6 枚目のカード。`src/core/Game.js` の `EXTERNAL.boxing`（サッカー・800m・トランポリンと同じ「別ページへ移動」）→ `boxing/index.html#from-main`。
+`#from-main` の時だけ「← タイトルへ」を出す。直接開いても・再読み込みしても単体で動く（タイトル側の状態に依存しない）。
+
+## 1. いちばん大事な分離: 試合 と ゲームシステム
+
+```
+            ┌──────────── 試合（1 つだけ・ずっと続く）────────────┐
+入力 ──▶ SystemDirector.input() ──▶ FightCore.update()  HP / 行動 / AI / ダウン / 判定の材料
+(A D J K L Space)   ▲ 読み替え           │ イベント（land / perfect / hit / down …）
+                    │                     ├──▶ SystemDirector.onFight()（慣れの目安・システム固有の反応）
+            ゲームシステム 1〜3 個         ├──▶ Show.onFight()（HYPE・観客・実況・テロップ・リプレイ）
+            （カメラ・見た目・画面・       └──▶ BoxingMode（音・カメラの揺れ・ダウンのカウント）
+             ルールの一部）
+```
+
+- `boxing/src/core/FightCore.js` … 見た目から独立した試合。相手は必ず予備動作（テル）を見せてから打つ（Punch-Out!! の分かりやすさ）。
+  テルの最後によければ PERFECT（相手の空振り → カウンターの窓 1 回ぶん）/ ガードで軽減 / 何もしなければ当たる。
+  位置の決め方は `rules.mode`: `fixed`（間合い自動・よける = スリップ）/ `axis`（横視点・前後に動く）/ `circle`（真上・相手の周りを回る）。
+  システムが差し込めるルール: `still`（正面固定）`enemyGuardAlways`（カウンター以外は通らない）`onBeat`（リズム判定）`dodgeHook`（QTE 成功なら必ずよける）`forceTell`（拍に合わせて攻撃させる）`grace`（切り替えの瞬間は 0.6 秒待たせる）。
+- ゲームシステムが変わっても HP・ラウンド・時間・相手はそのまま。切り替えで理不尽に当てないために `grace()`。
+- 永久コンボ防止: ぐらつき（stun）は延長しない・カウンターは 1 回よけて 1 回・3 発続けてもらった王者はガードを固める。
+
+## 2. ゲームシステム 13 種（`boxing/src/systems/Systems.js`）
+
+1 つのシステム = カメラ + 見た目（`BoxingFx` の LOOKS）+ 画面（DOM を `#sysLayer` へ）+ 操作の読み替え + ルール。
+
+| id | 名前 | 操作・ルールの変化 | 画面 |
+| --- | --- | --- | --- |
+| 3d | 3D | 基本（肩越し） | — |
+| counter | COUNTER | 相手は常にガード。よけた直後だけ通る（×3）。正面固定・自分は半透明 | COUNTER CHANCE! |
+| side | SIDE VIEW | 平行投影の横スクロール。A D が前後、下がって間合いでよける | 1P VS CPU・床 |
+| top | TOP VIEW | 真上の作戦盤。A D で相手の周りを回り込み、赤い円（着弾点）から出ればよける | 方眼・赤い円 |
+| fps | FIRST PERSON | 自分の頭の位置から。自分の拳だけ見える | 照準・レーダー・キルログ |
+| rhythm | RHYTHM | 120 BPM。拍に合わせると ×2 / 外すと ×0.5。相手も 4 拍ごとに拍の頭で打つ | ノーツのレーン・判定・コンボ |
+| slow | SUPER SLOW | 全部 0.35 倍（試合の時計も） | 映画の黒帯・1000fps |
+| 8bit | 8BIT | 画素化 + 減色、音も矩形波 | 1UP / HI・PUSH J K |
+| tv | TV BROADCAST | 中継のカメラが勝手に切り替わる（6 台） | LIVE・局ロゴ・ニュースの帯 |
+| cctv | SECURITY CAM | 天井の隅の 4 台を順に（白黒・緑・魚眼） | CAM 01・REC・時刻 |
+| phone | SMARTPHONE LIVE | 観客席のスマホの縦動画（手ブレ・ズームしすぎ） | 配信 UI・コメント・♥ |
+| qte | QUICK TIME EVENT | テルが出たら指定のボタン（A / D / L）。押せば必ずよける | ボタンの輪 |
+| tele | TELEPHOTO ×400 | 一番上の席から超望遠（揺れる・遅れる） | 照準・距離 |
+
+重ね（FINAL）: 1 つ目がカメラと操作、2 つ目以降は見た目・画面・ルールを足す（`SIDE VIEW × 8BIT`、`FIRST PERSON × RHYTHM` …）。
+
+### いつ変わるか（`SystemDirector.js`）
+
+- ROUND 1: 時刻 … 0 秒 3D → 25 秒 COUNTER → 62 秒 SIDE
+- ROUND 2: **慣れた瞬間** … 15 秒たって、そのシステムで 4 回うまくいったら（命中 1 / よけ 1 / PERFECT 1.5 / カウンター 2）変わる。最長 28 秒
+- ROUND 3: 中継系（TV → CCTV → PHONE → TELE → COUNTER）+ 周りが騒がしくなる（テロップ・パネル・CM・小窓）
+- FINAL: 2 つ重ねを 10.5 秒ごと → 残り 34 秒で `???`（3 秒ごと・ラベルも ???）→ 残り 12 秒で `3D（たぶん）`
+- 1 ラウンド = ゲーム内 110 秒（表示は 3:00 から）。ダウン中・リプレイ中は止まる
+
+## 3. 周り（`boxing/src/show/`）
+
+- `Show.js` … HYPE（ラウンドごとに上がりやすさと上限が上がる: R1 LV2 まで → FINAL で MAX）、観客（`CrowdDirector.set` でブロック単位の姿勢: 座る → 拍手 → 立つ → スマホ → 歓喜 → 跳ぶ・ウェーブ）、
+  妙に盛り上がっている人（NearCrowd の extras を CPU で上書き）、スマホのフラッシュ（900 点・1 draw call・シェーダーでランダム点滅）、紙吹雪・風船（`src/fx/Particles`）、
+  テロップ、CM（L 字: canvas を CSS で 72% に縮めるだけ。試合はそのまま左上で続く）、小窓の中継（ビューポート + シザー）、吊り下げビジョン（448×262 の描画先に 3 フレームに 1 回）、結果画面
+- `Commentary.js` … 実況と解説。drift 0（熱い）→ 3（どうでもいい）をラウンドと HYPE で決める。tracery の考え方（`#記号#` を規則で展開）の最小版
+- `Panels.js` … 情報パネル。ROUND 1 はパンチ数・命中率 → ROUND 2 は観客数・心拍数 → ROUND 3 は気温・湿度・好きな食べ物・ゴング係の緊張・Wi-Fi … → FINAL は小さいのが大量に。左右の端だけ（中央の選手と相手のパンチは隠さない）
+- `Replay.js` … 3 人（侍・王者・レフェリー）のポーズ（関節の値 45 個 × 3 人）を毎フレーム 300 フレームぶん記録（約 160KB）。
+  再生はビューポート + シザーで 1 枚のキャンバスに 1 → 2 → 4 → 8 → 16 分割、セルごとに別のカメラ（中継・寄り・拳・床・天井・スマホ・魚眼・360°・レフェリー・望遠 …）と別の速さ（×0.1 〜 ×4・巻き戻し）。
+  白黒・セピア・ネガはセルの上の DOM の `backdrop-filter`（描画パスを増やさない）。記録をそのまま再生するだけで、動きは作り変えない。SPACE / タップでスキップ
+
+## 4. 会場と選手
+
+- `arena/ArenaLayout.js` … 角丸長方形の 3 層（床・1 階・2 階）約 19,868 席。サッカーの `CrowdField` / `CrowdDirector` / `NearCrowd` がそのまま読める形（count, x, y, z, s, tier, block, row, blocks）で出す。
+  `uCore = (0, 0)` で全員リングを向く。床の席は全部 3D の人形（NearCrowd・`core: {sx:0, sz:0}` を追加）
+- `arena/BoxingArena.js` … リング・ロープ（少したるむ）・コーナー・階段・リングサイド（審判席・実況席・ゴング・TV カメラ 16 台・クレーン）・トラスの投光器・吊り下げビジョン・入場ゲート・光の筋（HYPE）
+- `fighters/BoxerModel.js` … 骨の階層 + 骨ごとに結合した頂点カラーのパーツ + フラットシェーディング。腕と脚は解析的な 2 ボーン IK（closed-chain-ik の考え方の最小版）
+- `fighters/BoxerAnimator.js` … FightCore の状態 → 手続きポーズ（構え・ジャブ・ストレート・アッパー・フック・テル・スリップ・ガード・被弾・ダウン（片膝）・勝利・礼）。**選手は何があっても真顔**
+
+## 5. 笑いのルール
+
+- 選手・レフェリー・勝敗は茶化さない。痛み・けが・血の表現はしない（被弾はあごが上がって半歩下がるだけ。ダウンは片膝をつく）
+- 笑いはゲームシステム・カメラ・実況・中継・観客・リプレイ・テロップ・演出・スポンサー・会場・UI から
+- 負けた方も立ち上がって礼をする。判定はジャッジ 3 人・10 点法で真面目に出す
+
+## 6. 性能
+
+| 項目 | 値（1280×720・SwiftShader でも崩れない構成） |
+| --- | --- |
+| 観客 | 約 2 万人 = 1 draw call（ビルボード・LOD）+ 床の 3D 人形 712 人（1 draw call） |
+| 描画 | 通常 約 200 draw call・15 万三角形 / 小窓・吊り下げビジョンは縮小ビューポート / 描画先 |
+| ポストエフェクト | 1 パス（DigitalShader）+ 半分解像度のブルーム + OutputPass。VERY LOW ではブルームと吊り下げビジョンを切る |
+| 自動調整 | `soccer/src/core/PerformanceGovernor.js`（FPS を見て pixelRatio・3D 観客・alpha-to-coverage を下げる） |
+| スキンメッシュ | 使わない（骨 = Group の階層、観客は GPU の姿勢） |
+
+## 7. 調べた GitHub リポジトリ（非ゲームの技術を優先）とライセンス
+
+コードはコピーしていない。考え方だけを参考にし、必要な分だけ自前で最小実装した。
+
+| リポジトリ | ライセンス | 使い方 |
+| --- | --- | --- |
+| galaxykate/tracery | Apache-2.0 | 文法の展開（`#記号#`）の考え方 → `Commentary.js` |
+| nodecg/nodecg | MIT | 放送グラフィックの「イベント → グラフィックの状態」分離 → `Show.js` のテロップ・パネル |
+| rrweb-io/rrweb | MIT | 記録して再生（状態のスナップショットのリングバッファ）→ `Replay.js` |
+| Tonejs/Tone.js | MIT | 拍の時計に合わせたスケジューリングの考え方 → リズムの判定・拍の音 |
+| gkjohnson/closed-chain-ik-js | Apache-2.0 | IK の解き方の参考（ここでは 2 ボーンの解析解だけ）→ `BoxerModel.solve` |
+| mrdoob/three.js（examples: webgl_multiple_views） | MIT | ビューポート + シザーで 1 キャンバスに複数カメラ → リプレイの分割・小窓 |
+| pmndrs/postprocessing | Zlib | 検討のみ（既存の DigitalShader 1 パスで足りるので不採用） |
+| pmndrs/cannon-es / dimforge/rapier | MIT / Apache-2.0 | 検討のみ（ラグドールは「倒れ込む」表現になるので不採用。ダウンは手続きポーズ） |
+
+## 8. テスト・開発用
+
+- `npm run boxing:smoke` … 自動操縦・描画なし・8 倍速で入場 → 4 ラウンド → KO / 判定 → 結果まで。ラウンド・システム・HP・ダウン・HYPE の推移と console error
+- `npm run boxing:systems` … 13 種を順に切り替えて撮影（`--ids=side+8bit,fps` で重ねも）
+- `node boxing/tools/shot.mjs --q="round=3&auto" --times=5000,15000`
+- URL: `?round=N` `?sys=id[,id]` `?skip` `?auto` `?fast=N` `?quality=` `?debug` `?nofx` `?mute` `?norender`

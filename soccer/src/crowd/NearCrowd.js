@@ -72,7 +72,8 @@ export class NearCrowd {
     this.max = 0;
   }
 
-  build(center, { radius = 26, max = 1400, tier = 0, extras = [] } = {}) {
+  // core: 観客が向く中心の長方形（既定はサッカー場。ボクシングはリング = { sx: 0, sz: 0 }）
+  build(center, { radius = 26, max = 1400, tier = 0, extras = [], core = CORE } = {}) {
     this.dispose();
     const L = this.layout;
     const cand = [];
@@ -100,8 +101,8 @@ export class NearCrowd {
     const meta = new Uint8Array(n * 4);
     this.over = new Float32Array(n * 4);
     const toYaw = (x, z) => {
-      const qx = Math.max(-CORE.sx, Math.min(CORE.sx, x));
-      const qz = Math.max(-CORE.sz, Math.min(CORE.sz, z));
+      const qx = Math.max(-core.sx, Math.min(core.sx, x));
+      const qz = Math.max(-core.sz, Math.min(core.sz, z));
       // ピッチ側（内側）を向く。人形の前は -Z
       const ix = qx - x;
       const iz = qz - z;
