@@ -33,7 +33,7 @@ export class BoxingFx {
     this.composer = new EffectComposer(renderer);
     this.renderPass = new RenderPass(scene, camera);
     this.composer.addPass(this.renderPass);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.5, 0.55, 0.88);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.4, 0.4, 1.35);
     this.composer.addPass(this.bloom);
     this.digital = new ShaderPass(DigitalShader);
     this.composer.addPass(this.digital);
@@ -100,7 +100,7 @@ export class BoxingFx {
     u.uTall.value = c.tall;
     u.uHue.value = c.hue;
     u.uInvert.value = c.invert;
-    this.bloom.strength = c.bloom + hype * 0.35;
+    this.bloom.strength = (c.bloom + hype * 0.3) * 0.7;
   }
 
   render() {

@@ -722,7 +722,7 @@ body.lshape .fightbar {
 /* 横スクロール（格闘ゲーム） */
 .ov-side .side-top {
   position: absolute;
-  top: calc(var(--safe-t) + 58px);
+  top: calc(var(--safe-t) + 104px);
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-dot);
@@ -856,7 +856,7 @@ body[data-sys='8bit'] .hp {
 .ov-rhythm .lane {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-b) + 150px);
+  bottom: calc(var(--safe-b) + 96px);
   transform: translateX(-50%);
   width: min(70vw, 720px);
   height: 58px;
@@ -907,7 +907,7 @@ body[data-sys='8bit'] .hp {
 .ov-rhythm .rj {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-b) + 214px);
+  bottom: calc(var(--safe-b) + 160px);
   transform: translateX(-50%);
   font-size: 26px;
   font-weight: 700;
@@ -918,7 +918,7 @@ body[data-sys='8bit'] .hp {
 .ov-rhythm .combo {
   position: absolute;
   right: calc(var(--safe-r) + 216px);
-  bottom: calc(var(--safe-b) + 150px);
+  bottom: calc(var(--safe-b) + 164px);
   font-size: 34px;
   font-weight: 700;
   color: var(--pink);

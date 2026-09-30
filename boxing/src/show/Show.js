@@ -115,8 +115,15 @@ export class Show {
 
   // ------------------------------------------------------------------
   // HYPE
+  // ラウンドが進むほど上がりやすく、上限も上がる（ROUND 1 は LV 2 まで … FINAL で MAX）
   addHype(a) {
-    this.hype = Math.min(1, this.hype + a);
+    const r = Math.max(1, this.m.round);
+    const k = [0.6, 0.6, 0.75, 0.95, 1.15][r];
+    this.hype = Math.min(this.cap(), this.hype + a * k);
+  }
+
+  cap() {
+    return [0.45, 0.45, 0.7, 0.9, 1][this.m.round] ?? 1;
   }
 
   drift() {
@@ -286,7 +293,7 @@ export class Show {
           this.telop(`COUNTER!　${this.lastPunch}`, 'gold', 1.6, true);
           this.commentary.say('counter', d, { ...v, punch: this.lastPunch }, true);
           this.react('big');
-          if (ev.dmg >= 12 && this.m.time - this.lastReplay > 22 && this.canReplay()) this.queueReplay('COUNTER');
+          if (ev.punch !== 'jab' && (this.m.round >= 2 || this.m.roundT > 30) && this.m.time - this.lastReplay > 40 && this.canReplay()) this.queueReplay('COUNTER');
         } else {
           this.commentary.say('land', d, { ...v, punch: this.lastPunch });
           if (ev.punch === 'upper') this.react('big');
@@ -309,7 +316,7 @@ export class Show {
         this.commentary.say('perfect', d, v);
         this.react('ooh');
         this.m.bAudio.ooh();
-        if (this.m.round >= 3 && Math.random() < 0.35 && this.m.time - this.lastReplay > 25 && this.canReplay()) this.queueReplay('PERFECT DODGE');
+        if (this.m.round >= 3 && Math.random() < 0.35 && this.m.time - this.lastReplay > 40 && this.canReplay()) this.queueReplay('PERFECT DODGE');
         break;
       case 'dodge':
         this.addHype(0.02);
@@ -341,7 +348,7 @@ export class Show {
     this.commentary.say('down', this.drift(), this.vars(), true);
     this.react(who === 'enemy' ? 'downE' : 'downP');
     this.confettiBurst(who === 'enemy' ? 260 : 80);
-    if (who === 'enemy' && !final && this.canReplay()) this.queueReplay('DOWN', { delay: 0.6 });
+    if (who === 'enemy' && !final && this.m.time - this.lastReplay > 15 && this.canReplay()) this.queueReplay('DOWN', { delay: 0.6 });
   }
 
   onGetUp(who) {
@@ -357,7 +364,7 @@ export class Show {
     this.react('ko');
     this.confettiBurst(900);
     this.balloonBurst(60);
-    this.addHype(0.3);
+    this.hype = 1;
     const name = r.winner === 'player' ? '侍' : r.winner === 'enemy' ? '王者' : '';
     if (r.cards) {
       const J = ['A', 'B', 'C'];
@@ -403,7 +410,7 @@ export class Show {
 
     // HYPE: ゆっくり下がる。ラウンドが進むほど下がりにくい（床が上がる）
     const floor = [0, 0, 0.05, 0.18, 0.35][m.round] ?? 0;
-    if (fighting) this.hype = Math.max(floor, this.hype - dt * 0.011);
+    if (fighting) this.hype = Math.max(floor, Math.min(this.cap(), this.hype - dt * (this.m.round <= 1 ? 0.012 : 0.01)));
     m.hype = this.hype;
     const lv = this.hype >= 0.97 ? 5 : Math.min(4, Math.floor(this.hype * 5));
     if (lv !== this.level) {

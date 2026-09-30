@@ -420,7 +420,7 @@ export class BoxingArena {
     const scene = this.scene;
     scene.add(new THREE.HemisphereLight(0x8a96c8, 0x14121c, 0.55));
     // リングを照らすスポット 2 つ（影はボクサーとレフェリーだけ）
-    const key = new THREE.SpotLight(0xfff2e0, 60, 40, 0.55, 0.45, 0);
+    const key = new THREE.SpotLight(0xfff2e0, 4.2, 40, 0.55, 0.45, 0);
     key.position.set(-3.5, 12, -4);
     key.target.position.set(0, RING.y, 0);
     key.castShadow = true;
@@ -429,7 +429,7 @@ export class BoxingArena {
     key.shadow.camera.far = 22;
     key.shadow.bias = -0.0006;
     scene.add(key, key.target);
-    const fill = new THREE.SpotLight(0xdfe8ff, 32, 40, 0.6, 0.5, 0);
+    const fill = new THREE.SpotLight(0xdfe8ff, 2.6, 40, 0.6, 0.5, 0);
     fill.position.set(4.5, 11, 3.5);
     fill.target.position.set(0, RING.y, 0);
     scene.add(fill, fill.target);
@@ -489,6 +489,13 @@ export class BoxingArena {
     g.rotation.y = Math.PI / 2;
     this.group.add(g);
     this.gate = g;
+  }
+
+  // 横スクロールの時: 手前（+Z）のロープを消す
+  setNearRopes(on) {
+    this.ropes.forEach((r, i) => {
+      if (i % 4 === 2) r.visible = on;
+    });
   }
 
   // HYPE（0〜1）で会場が騒がしくなる: カメラが増える・光の筋・LED

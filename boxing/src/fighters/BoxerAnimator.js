@@ -308,8 +308,9 @@ export class RefereeAnimator {
     const ax = ex - px;
     const az = ez - pz;
     const al = Math.hypot(ax, az) || 1;
-    let tx = cx - (az / al) * 1.5;
-    let tz = cz + (ax / al) * 1.5;
+    // 自分（赤）から見て左側に立つ（肩越しのカメラの反対側）
+    let tx = cx + (az / al) * 1.6;
+    let tz = cz - (ax / al) * 1.6;
     let look = [cx, cz];
     if (down) {
       tx = down.x + (down.x > 0 ? -0.9 : 0.9);

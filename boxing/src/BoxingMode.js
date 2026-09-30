@@ -31,7 +31,7 @@ import { Show } from './show/Show.js';
 const ROUNDS = 4;
 const ROUND_NAMES = ['', 'ROUND 1', 'ROUND 2', 'ROUND 3', 'FINAL ROUND'];
 const INTERVAL_SEC = 13;
-const GET_UP = [0.6, 0.45, 0.35, 0.3];
+const GET_UP = [0.75, 0.7, 0.65, 0.6];
 
 export class BoxingMode {
   constructor(canvas) {
@@ -87,7 +87,7 @@ export class BoxingMode {
     this.buildNear(q.near);
 
     // ---- 選手・レフェリー・試合
-    this.core = new FightCore(createRng(this.seed + 7));
+    this.core = new FightCore(createRng(this.seed + 7), { playerHp: 100, enemyHp: 120 });
     this.P = new BoxerModel('samurai');
     this.E = new BoxerModel('champion');
     this.R = new BoxerModel('referee');
@@ -99,6 +99,7 @@ export class BoxingMode {
     // ---- 視点・画面・入力・音
     this.rig = new CameraRig(innerWidth / innerHeight);
     this.fx = new BoxingFx(renderer, scene, this.rig.camera);
+    if (this.params.has('nofx')) this.fx.enabled = false;
     this.input = new BoxingInput();
     this.audio = new AudioManager(this.bus);
     this.sAudio = new SoccerAudio(this.audio);
@@ -226,7 +227,7 @@ export class BoxingMode {
   setGhost(on) {
     const m = this.P.mat;
     m.transparent = on;
-    m.opacity = on ? 0.3 : 1;
+    m.opacity = on ? 0.22 : 1;
     m.depthWrite = !on;
     m.needsUpdate = true;
   }
@@ -279,7 +280,7 @@ export class BoxingMode {
     this.animE.override = null;
     const d = [1, 1.1, 1.2, 1.3][this.round - 1];
     this.core.difficulty = d;
-    this.baseRules = { aggression: [1, 1.1, 1.2, 1.35][this.round - 1], dmgMul: 0.9, playerDmgMul: 1 };
+    this.baseRules = { aggression: [1, 1.1, 1.2, 1.35][this.round - 1], dmgMul: [0.3, 0.28, 0.27, 0.28][this.round - 1], playerDmgMul: 1 };
     this.roundStats[this.round] = { pDmg: 0, eDmg: 0, pKD: 0, eKD: 0, landed: 0, dodges: 0 };
     document.getElementById('skipBtn').classList.add('hidden');
     this.hud.show(true);
@@ -308,6 +309,8 @@ export class BoxingMode {
 
   beginInterval() {
     this.systems.clear();
+    // コーナーで少し回復（両者とも最大の 25%）
+    for (const f of [this.core.player, this.core.enemy]) f.hp = Math.min(f.maxHp, f.hp + f.maxHp * 0.25);
     this.setPhase('interval');
     this.animP.override = { action: 'rest', pose: 'rest', ...this.cornerSeat('red') };
     this.animE.override = { action: 'rest', pose: 'rest', ...this.cornerSeat('blue') };
@@ -385,14 +388,14 @@ export class BoxingMode {
     this.show.onUsedTo(sys);
   }
 
-  // ---- ダウン: レフェリーがカウント。相手は立つ（FINAL と 3 度目は立てない）/ 自分は J K の連打で立つ
+  // ---- ダウン: レフェリーがカウント。相手は ROUND 3 までは必ず立つ（FINAL は立てない = KO）/ 自分は J K の連打で立つ
   startDown(who) {
     const f = who === 'player' ? this.core.player : this.core.enemy;
     const rs = this.roundStats[this.round];
     if (who === 'player') rs.pKD++;
     else rs.eKD++;
     this.core.running = false;
-    const final = who === 'enemy' && (this.round === ROUNDS || f.downs >= 3);
+    const final = who === 'enemy' && this.round === ROUNDS;
     this.downState = {
       who,
       f,
@@ -419,7 +422,7 @@ export class BoxingMode {
       this.bAudio.count(count);
       this.hud.big(String(count), { dur: 0.7, small: d.who === 'player' ? `J K を連打で立つ（${Math.min(d.mash, d.need)} / ${d.need}）` : '' });
       if (count === 10) {
-        this.knockout(d.who === 'player' ? 'enemy' : 'player', d.final && d.f.downs >= 3 && this.round < ROUNDS ? 'TKO' : 'KO');
+        this.knockout(d.who === 'player' ? 'enemy' : 'player', 'KO');
         return;
       }
     }

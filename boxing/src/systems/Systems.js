@@ -97,7 +97,7 @@ export class BoxSystem {
 }
 
 // ---- カメラの部品
-function chase(m, rig, dt, { back = 2.3, side = 0.75, up = 1.95, fov = 48, rate = 5 } = {}) {
+function chase(m, rig, dt, { back = 2.3, side = 0.95, up = 1.95, fov = 48, rate = 5 } = {}) {
   fightGeo(m, G);
   _a.copy(G.p).addScaledVector(G.dir, -back).addScaledVector(G.right, side);
   _a.y = Y + up;
@@ -140,11 +140,11 @@ class Counter extends BoxSystem {
   }
   camera(rig, dt) {
     fightGeo(this.m, G);
-    _a.copy(G.p).addScaledVector(G.dir, -1.45);
-    _a.y = Y + 1.62;
+    _a.copy(G.p).addScaledVector(G.dir, -1.7);
+    _a.y = Y + 2.05;
     _b.copy(G.e);
-    _b.y = Y + 1.32;
-    rig.aim(_a, _b, 44, 10, dt);
+    _b.y = Y + 1.28;
+    rig.aim(_a, _b, 46, 10, dt);
   }
   update(dt) {
     super.update(dt);
@@ -176,12 +176,14 @@ class Side extends BoxSystem {
     c.enemy.x = cx + 0.65;
     c.player.z = c.enemy.z = 0;
     c.axis = 0;
-    this.m.rig.ortho.near = 9; // 手前のロープ・客席を切る（z > 3m は写らない）
+    this.m.rig.ortho.near = 8.2; // 手前の客席・エプロンを切る（z > 3.8m は写らない）
+    this.m.arena.setNearRopes(false); // 手前のロープは消す（2D の格闘ゲームにロープは無い）
     this.m.rig.cut();
   }
   exit() {
     super.exit();
     this.m.rig.ortho.near = 0.05;
+    this.m.arena.setNearRopes(true);
     this.m.rig.cut();
   }
   input(raw) {
@@ -231,7 +233,7 @@ class Top extends BoxSystem {
   }
   camera(rig, dt) {
     fightGeo(this.m, G);
-    _a.set(G.mid.x * 0.6, Y + 14, G.mid.z * 0.6);
+    _a.set(G.mid.x * 0.6, Y + 6.2, G.mid.z * 0.6); // 吊り下げビジョン・トラスより下
     _b.set(G.mid.x * 0.6, Y, G.mid.z * 0.6);
     rig.aimOrtho(_a, _b, 2.5, _c.set(0, 0, -1), 5, dt);
   }
@@ -542,12 +544,12 @@ class Tv extends BoxSystem {
     let fov = 40;
     switch (this.shot) {
       case 'wide':
-        _a.copy(G.mid).addScaledVector(G.right, -7.5);
+        _a.copy(G.mid).addScaledVector(G.right, 7.5);
         _a.y = Y + 2.7;
         fov = 26;
         break;
       case 'ringside':
-        _a.copy(G.mid).addScaledVector(G.right, 3.6).addScaledVector(G.dir, -0.8);
+        _a.copy(G.mid).addScaledVector(G.right, 3.6).addScaledVector(G.dir, 0.8);
         _a.y = Y + 0.35;
         fov = 44;
         break;

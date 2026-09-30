@@ -260,7 +260,8 @@ export class FightCore {
       this.emit('whiff', { who: 'player', punch: p.type, dodged: true });
       return;
     }
-    const counter = this.counterWindow > 0 || E.stun > 0;
+    // カウンター = 相手の空振りの直後（1 回よけたら 1 回だけ）
+    const counter = this.counterWindow > 0;
     let dmg = def.dmg * this.rules.dmgMul;
     const beat = this.rules.onBeat ? this.rules.onBeat() : null;
     if (beat === 'perfect') dmg *= 2;
@@ -281,7 +282,10 @@ export class FightCore {
       }
       return;
     }
-    if (counter) dmg *= this.rules.counterMul;
+    if (counter) {
+      dmg *= this.rules.counterMul;
+      this.counterWindow = 0;
+    }
     P.stats.landed++;
     if (counter) P.stats.counters++;
     this.combo = this.time - this.combo.t < 0.7 ? { n: this.combo.n + 1, t: this.time } : { n: 1, t: this.time };
@@ -294,7 +298,18 @@ export class FightCore {
     }
     if (E.hp > 0 && E.action !== 'down') {
       this.setAction(E, 'hit');
-      if (counter || p.type === 'upper') E.stun = Math.max(E.stun, 0.6);
+      // ぐらつきは 1 回だけ（ぐらついている間に当てても延びない = 永久コンボにならない）
+      if ((counter || p.type === 'upper') && E.stun <= 0) E.stun = 0.5;
+      // 3 発続けてもらったら固める（王者は打たれっぱなしにならない）
+      E.streak = this.time - (E.lastHitT ?? -9) < 1.6 ? (E.streak ?? 0) + 1 : 1;
+      E.lastHitT = this.time;
+      if (E.streak >= 3) {
+        E.streak = 0;
+        E.stun = 0;
+        E.guardHeld = true;
+        E.guardUntil = this.time + 1.3 + this.rng.next() * 0.5;
+        this.emit('guardUp', { who: 'enemy' });
+      }
     }
     this.lastLand.player = this.time;
     this.emit('land', { who: 'player', punch: p.type, dmg, counter, beat, combo: this.combo.n });
