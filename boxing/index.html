@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#05060f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>ボクシング、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&family=DotGothic16&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body data-phase="boot" data-sys="none">
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <!-- ゲームシステムごとの画面（横スクロール・リズム・スマホ・監視カメラ…）はここへ差し込む -->
+      <div id="sysLayer" class="sys-layer"></div>
+
+      <!-- ===== 試合の HUD（ラウンド・時間・HP はずっと同じ） ===== -->
+      <div id="hud" class="hud hidden">
+        <div class="fightbar">
+          <div class="fb-side red">
+            <div class="fb-name"><b>侍</b><span>SAMURAI</span></div>
+            <div class="hp"><i id="hpP"></i><s id="hpPLag"></s></div>
+          </div>
+          <div class="fb-mid">
+            <div id="round" class="fb-round">ROUND 1</div>
+            <div id="time" class="fb-time">2:00</div>
+          </div>
+          <div class="fb-side blue">
+            <div class="fb-name"><span>CHAMPION</span><b>王者</b></div>
+            <div class="hp"><i id="hpE"></i><s id="hpELag"></s></div>
+          </div>
+        </div>
+        <div id="sysLabel" class="sys-label">
+          <small>CURRENT BOXING SYSTEM</small>
+          <b id="sysName">3D</b>
+          <em id="sysSub">普通の 3D ボクシング</em>
+        </div>
+        <div class="hype">
+          <div class="hype-k">HYPE<small>会場がおかしくなるゲージ</small></div>
+          <div class="hype-bar"><i id="hypeFill"></i></div>
+          <div id="hypeLv" class="hype-lv">LV 0</div>
+        </div>
+        <div id="panelsL" class="panels left"></div>
+        <div id="panelsR" class="panels right"></div>
+        <div id="keys" class="keys"></div>
+      </div>
+
+      <div id="telop" class="telop"></div>
+      <div id="talk" class="talk"></div>
+      <div id="big" class="big"></div>
+      <div id="flashy" class="flashy"></div>
+
+      <!-- CM（L 字）: 試合は小さくなって続く -->
+      <div id="cm" class="cm hidden"></div>
+
+      <!-- リプレイ（分割画面のラベル） -->
+      <div id="replay" class="replay hidden">
+        <div class="rp-head"><b>REPLAY</b><span id="rpInfo"></span></div>
+        <div id="rpCells" class="rp-cells"></div>
+        <div class="rp-skip">SPACE / TAP でスキップ ▸▸</div>
+      </div>
+
+      <!-- タイトル -->
+      <div id="intro" class="screen intro">
+        <div class="intro-wrap">
+          <div class="i-live">● LIVE · WORLD CHAMPIONSHIP · 4 ROUNDS</div>
+          <h1><span>ボクシング、</span><span class="b">なのに。</span></h1>
+          <p class="i-lead">試合はちゃんとしてる。<br />ゲームがちゃんとしてない。</p>
+          <ol class="i-how">
+            <li><b>J</b> 左パンチ ・ <b>K</b> 右パンチ ・ <b>L</b> ガード（長押し）</li>
+            <li><b>A</b> / <b>D</b>（← / →）で よける・動く ・ <b>SPACE</b> アッパー</li>
+            <li>操作はずっと同じ。<b>ゲームのほうが変わる。</b></li>
+          </ol>
+          <div class="i-note">VERTICAL SLICE · 約 9 分 · 赤コーナー 侍 vs 青コーナー 王者</div>
+          <div class="i-start blink">SPACE / TAP でスタート</div>
+        </div>
+        <button id="back" class="back-btn hidden" type="button">← タイトルへ</button>
+      </div>
+
+      <div id="result" class="screen result hidden"></div>
+
+      <div id="pause" class="screen pause hidden">
+        <div>PAUSE<small>ESC / タップで再開</small></div>
+        <button type="button" class="back-btn p-back hidden" data-action="back">← タイトルへ</button>
+      </div>
+
+      <!-- タッチ用のボタン（PC ではキーボード） -->
+      <div id="pad" class="pad hidden">
+        <div class="pad-l">
+          <button type="button" data-key="KeyA">◀</button>
+          <button type="button" data-key="KeyD">▶</button>
+        </div>
+        <div class="pad-r">
+          <button type="button" data-key="KeyL" class="g">L<small>GUARD</small></button>
+          <button type="button" data-key="KeyJ">J<small>LEFT</small></button>
+          <button type="button" data-key="KeyK">K<small>RIGHT</small></button>
+          <button type="button" data-key="Space" class="s">SP<small>UPPER</small></button>
+        </div>
+      </div>
+
+      <button id="skipBtn" class="skip-btn hidden" type="button">SKIP ▸▸</button>
+      <button id="muteBtn" class="mute-btn" type="button" aria-label="mute">♪</button>
+      <div id="dev" class="dev hidden"></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

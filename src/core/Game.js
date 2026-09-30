@@ -23,6 +23,11 @@ const EXTERNAL = {
     title: ['サッカー、', 'なのに。'],
     note: '10 万人の中から自分の席を探していたら、試合が終わった。<br />双眼鏡で空席を探す。SPACE / TAP でサッカーのページへ移動します。',
   },
+  boxing: {
+    url: './boxing/index.html#from-main',
+    title: ['ボクシング、', 'なのに。'],
+    note: '試合はちゃんとしてる。ゲームがちゃんとしてない。<br />J K でパンチ、A D でよける。SPACE / TAP でボクシングのページへ移動します。',
+  },
 };
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';

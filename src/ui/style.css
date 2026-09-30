@@ -699,6 +699,7 @@ body {
   gap: 14px;
   margin: 0 auto 18px;
   flex-wrap: wrap;
+  max-width: 1060px; /* 6 枚を 3 + 3 に */
 }
 .mode-card {
   position: relative;
