@@ -6,6 +6,7 @@ import { makeHaloTexture, SPONSORS } from '../arena/arenaTextures.js';
 import { Commentary } from './Commentary.js';
 import { Panels } from './Panels.js';
 import { Replay } from './Replay.js';
+import { Happenings } from './Happenings.js';
 import { ROUND_SEC } from '../systems/SystemDirector.js';
 
 // 周り（中継・会場・観客）の担当。試合とゲームシステムには口を出さない。
@@ -56,6 +57,7 @@ export class Show {
     this.commentary = new Commentary(m.hud);
     this.panels = new Panels(m);
     this.replay = new Replay(m);
+    this.happen = new Happenings(m);
     this.telopT = 0;
     this.infoT = 8;
     this.confettiCount = 0;
@@ -446,7 +448,7 @@ export class Show {
     this.replay.update(dt);
     const fighting = m.phase === 'fight' && !m.downState && !this.replay.active;
     // 記録（リプレイ用）
-    if (!this.replay.active) this.replay.record(dt * (m.phase === 'fight' ? m.systems.timeScale : 1), [m.animP.pose, m.animE.pose, m.animR.pose]);
+    if (!this.replay.active) this.replay.record(dt * (m.phase === 'fight' ? m.systems.timeScale : 1), [m.animP.sm ?? m.animP.pose, m.animE.sm ?? m.animE.pose, m.animR.sm ?? m.animR.pose]);
 
     // HYPE: ゆっくり下がる。ラウンドが進むほど下がりにくい（床が上がる）
     const floor = [0, 0, 0.05, 0.18, 0.35][m.round] ?? 0;
@@ -473,7 +475,7 @@ export class Show {
 
     // フラッシュ・紙吹雪・風船
     this.flashU.uTime.value = m.time;
-    this.flashU.uRate.value = Math.min(1, this.hype * 0.9 + (m.systems.primary?.id === 'phone' ? 0.3 : 0));
+    this.flashU.uRate.value = Math.min(1, this.hype * 0.9 + (m.systems.primary?.id === 'phone' ? 0.3 : 0) + this.happen.flashBoost);
     const size = m.renderer.getDrawingBufferSize(this._sz ?? (this._sz = new THREE.Vector2()));
     const cam = m.rig.camera;
     const scale = cam.isPerspectiveCamera ? size.y / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) : size.y / 4;
@@ -488,6 +490,8 @@ export class Show {
     this.commentary.update(dt, this.drift(), this.vars(), fighting);
     if (m.round >= 1 && ['fight', 'ready', 'interval'].includes(m.phase)) this.panels.update(dt, m.round, m.roundT);
 
+    this.happen.tick(dt);
+    if (fighting) this.happen.update(dt, m.round, m.roundT);
     if (fighting) {
       const t = m.roundT;
       // ROUND 3 から: 関係ない情報のテロップ

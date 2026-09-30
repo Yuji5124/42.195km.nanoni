@@ -360,6 +360,8 @@ export class BoxingArena {
     // 投光器（発光する円盤）
     const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff4de });
     lampMat.color.multiplyScalar(2.2);
+    this.lampMat = lampMat;
+    this.lampColor = lampMat.color.clone();
     const lampGeo = new THREE.CircleGeometry(0.2, 12);
     this.lamps = [];
     for (let i = 0; i < 16; i++) {
@@ -418,7 +420,8 @@ export class BoxingArena {
 
   buildLights() {
     const scene = this.scene;
-    scene.add(new THREE.HemisphereLight(0x8a96c8, 0x14121c, 0.8));
+    this.hemi = new THREE.HemisphereLight(0x8a96c8, 0x14121c, 0.8);
+    scene.add(this.hemi);
     // リングを照らすスポット 2 つ（影はボクサーとレフェリーだけ）
     const key = new THREE.SpotLight(0xfff2e0, 4.2, 40, 0.55, 0.45, 0);
     key.position.set(-3.5, 12, -4);
@@ -452,6 +455,7 @@ export class BoxingArena {
     const hg = new THREE.BufferGeometry();
     hg.setAttribute('position', new THREE.BufferAttribute(hp, 3));
     this.group.add(new THREE.Points(hg, halo));
+    this.haloMat = halo;
 
     // HYPE 用の動く光の筋（最初は消えている）
     const beamTex = makeBeamTexture();
@@ -489,6 +493,19 @@ export class BoxingArena {
     g.rotation.y = Math.PI / 2;
     this.group.add(g);
     this.gate = g;
+  }
+
+  // 停電（0〜1）: 照明・投光器・ハロを落とす（ROUND 1 のハプニング）
+  setBlackout(k) {
+    if (!this.lightBase) this.lightBase = { key: this.keyLight.intensity, fill: this.fillLight.intensity, house: this.house.intensity, hemi: this.hemi.intensity };
+    const b = this.lightBase;
+    const f = 1 - k * 0.93;
+    this.keyLight.intensity = b.key * f;
+    this.fillLight.intensity = b.fill * f;
+    this.house.intensity = b.house * (1 - k * 0.8);
+    this.hemi.intensity = b.hemi * (1 - k * 0.75);
+    this.lampMat.color.copy(this.lampColor).multiplyScalar(1 - k * 0.97);
+    this.haloMat.opacity = 0.75 * (1 - k);
   }
 
   // 横スクロールの時: 手前（+Z）のロープを消す

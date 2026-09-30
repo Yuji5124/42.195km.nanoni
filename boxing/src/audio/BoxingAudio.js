@@ -143,6 +143,31 @@ export class BoxingAudio {
     this.audio.tone(990, 0.16, { type: 'triangle', vol: 0.06, at: t + 0.24 });
   }
 
+  // ---- ハプニングの音
+  // 停電: 低く沈む音 / 予備電源: ブーン → カチッ
+  powerDown() {
+    if (!this.ctx) return;
+    this.audio.tone(180, 0.9, { type: 'sawtooth', vol: 0.12, slideTo: 40, cutoff: 900 });
+    this.audio.noiseHit(0.5, { type: 'lowpass', freq: 400, vol: 0.3 });
+  }
+
+  powerUp() {
+    if (!this.ctx) return;
+    const t = this.t();
+    this.audio.tone(50, 1.2, { type: 'sawtooth', vol: 0.08, slideTo: 120, cutoff: 600, at: t });
+    this.audio.noiseHit(0.05, { type: 'highpass', freq: 2500, vol: 0.25, at: t + 0.9 });
+  }
+
+  // まちがった BGM（のんびりした自作のメロディ・約 4 秒）
+  wrongBgm() {
+    if (!this.ctx) return;
+    const t = this.t() + 0.05;
+    const N = { C5: 523, D5: 587, E5: 659, F5: 698, G5: 784, A5: 880, B5: 988, C6: 1047, C4: 262, F4: 349, G4: 392 };
+    const mel = ['C5', 'E5', 'G5', 'E5', 'F5', 'A5', 'G5', null, 'E5', 'G5', 'C6', 'B5', 'A5', 'F5', 'G5', null];
+    mel.forEach((n, i) => n && this.audio.tone(N[n], 0.22, { type: 'triangle', vol: 0.09, at: t + i * 0.24, attack: 0.01 }));
+    ['C4', 'C4', 'F4', 'G4'].forEach((n, i) => this.audio.tone(N[n], 0.9, { type: 'square', vol: 0.03, at: t + i * 0.96, cutoff: 1200 }));
+  }
+
   update(dt, excite) {
     this.crowd.update(dt, { excite, playing: true });
   }

@@ -8,7 +8,7 @@ import { RING } from '../arena/BoxingArena.js';
 //   白黒・セピアなどはセルの上の DOM の backdrop-filter（GPU の合成で軽い）。
 // 選手のポーズは本物の記録だけ（リプレイで動きを作り変えない）。
 
-const SCAL = ['x', 'y', 'z', 'yaw', 'hipY', 'hipX', 'hipZ', 'heelL', 'heelR'];
+const SCAL = ['x', 'y', 'z', 'yaw', 'hipY', 'hipX', 'hipZ', 'heelL', 'heelR', 'toeL', 'toeR'];
 const VECS = ['hipRot', 'spine', 'chest', 'head', 'footL', 'footR', 'gloveL', 'gloveR', 'elbowL', 'elbowR', 'kneeL', 'kneeR'];
 const STRIDE = SCAL.length + VECS.length * 3;
 const FRAMES = 300;
