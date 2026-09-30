@@ -215,7 +215,10 @@ export class BoxingMode {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && ['fight', 'ready', 'interval', 'walkin'].includes(this.phase)) this.setPaused(true);
     });
-    if (this.touch) $('pad').classList.remove('hidden');
+    if (this.touch) {
+      $('pad').classList.remove('hidden');
+      document.body.classList.add('touch');
+    }
   }
 
   wakeAudio() {
@@ -524,6 +527,8 @@ export class BoxingMode {
     this.last = now;
     const t0 = performance.now();
     this.gov.sample(realDt);
+    // ポーズの切り替えは止まっている間も受け付ける
+    if (this.input.wasPressed('Escape') && !['title', 'result', 'finish'].includes(this.phase)) this.setPaused(!this.paused);
     if (!this.paused) {
       for (let i = 0; i < this.fast; i++) this.update(realDt);
     }
@@ -536,7 +541,6 @@ export class BoxingMode {
     this.time += dt;
     if (!this.show.blocking) this.phaseT += dt;
     const input = this.input;
-    if (input.wasPressed('Escape') && !['title', 'result', 'finish'].includes(this.phase)) this.setPaused(!this.paused);
     if (input.wasPressed('KeyM')) document.getElementById('muteBtn').dispatchEvent(new Event('pointerdown'));
     if (this.phase === 'title' && (input.wasPressed('Space') || input.wasPressed('Enter'))) this.start();
     if ((this.phase === 'walkin' || this.phase === 'interval') && input.wasPressed('Space') && this.phaseT > 0.4) this.skip();

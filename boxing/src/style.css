@@ -1576,3 +1576,23 @@ body.replaying .talk {
 body[data-phase='interval'] .skip-btn {
   bottom: calc(var(--safe-b) + 132px);
 }
+
+/* タッチ端末: 画面のボタンがあるのでキーの説明は出さない・音のボタンは右上 */
+body.touch .keys {
+  display: none;
+}
+body.touch .mute-btn {
+  top: calc(var(--safe-t) + 62px) !important;
+  bottom: auto !important;
+}
+@media (max-height: 520px), (max-width: 700px) {
+  .hype-k small {
+    display: none;
+  }
+  .fb-name span {
+    display: none;
+  }
+  .ov-top .tac {
+    display: none;
+  }
+}
