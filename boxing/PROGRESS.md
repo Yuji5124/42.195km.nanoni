@@ -26,4 +26,4 @@
 
 ## 次にやること
 遊んだ人の感想を待つ。候補: 観客のボード（応援パネル）・入場曲・リプレイ中の実況・FINAL の ??? の演出を増やす・実機 GPU での FPS 計測。
-GitHub Pages に出すには main へのマージが必要（PR はまだ作っていない）。
+main へ PR を出してマージ → GitHub Pages（https://yuji5124.github.io/42.195km.nanoni/boxing/）に公開。以後の修正は main から作り直したブランチで。
