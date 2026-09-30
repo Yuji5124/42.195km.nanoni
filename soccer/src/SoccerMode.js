@@ -1072,7 +1072,7 @@ export class SoccerMode {
       [
         `FPS ${this.gov.fps.toFixed(0)}  ${this.gov.q.name}  PR ${this.renderer.getPixelRatio().toFixed(2)}`,
         `draw ${r.render.calls}  tris ${(r.render.triangles / 1000).toFixed(0)}k`,
-        `geo ${r.memory.geometries}  tex ${r.memory.textures}`,
+        `geo ${r.memory.geometries}  tex ${r.memory.textures}  buffers≈${this.bufferMB()}MB`,
         `JS ${this.jsMs?.toFixed(2)}ms  match ${this.matchMs?.toFixed(2)}  crowd ${this.crowdMs?.toFixed(3)}`,
         `vision ${this.broadcast.renderMs.toFixed(2)}ms  pick ${this.search.pickMs?.toFixed(3) ?? '-'}ms`,
         `crowd logical 100,000  visible ~${vis.toLocaleString('en-US')}  near3D ${this.near.count}`,
@@ -1080,6 +1080,23 @@ export class SoccerMode {
         `target ${this.layout.label(this.search.target)}`,
       ].join('\n')
     );
+  }
+
+  // シーンの頂点バッファ + ビジョンの描画先の概算（MB）
+  bufferMB() {
+    if (this._mb) return this._mb;
+    const seen = new Set();
+    let bytes = 0;
+    this.scene.traverse((o) => {
+      const g = o.geometry;
+      if (!g || seen.has(g)) return;
+      seen.add(g);
+      for (const a of Object.values(g.attributes)) bytes += a.array?.byteLength ?? 0;
+      if (g.index) bytes += g.index.array.byteLength;
+    });
+    bytes += this.broadcast.rt.width * this.broadcast.rt.height * 4;
+    this._mb = (bytes / 1048576).toFixed(1);
+    return this._mb;
   }
 
   // 視野に入っているブロックの座席数の合計（概算）

@@ -133,10 +133,12 @@ export class SoccerAudio {
     if (!this.ready) return;
     const t = this.ctx.currentTime;
     if (home) {
-      this.noise(6.5, { freq: 420, sweepTo: 1300, q: 0.5, vol: 0.9, attack: 0.25, at: t });
-      this.noise(4.5, { type: 'lowpass', freq: 380, vol: 0.5, attack: 0.1, at: t });
-      for (let k = 0; k < 4; k++) this.voice(160 + k * 45, 3.6, { vowel: 'a', vol: 0.05, at: t + 0.05 * k, n: 8, attack: 0.2 });
-      this.audio.tone(55, 1.4, { type: 'sine', slideTo: 38, vol: 0.4, at: t });
+      // 爆発: 広い帯のノイズの山 + 低い地鳴り + 何千人の「ワーッ」+ 低音
+      this.noise(6.5, { freq: 480, sweepTo: 1400, q: 0.35, vol: 1.6, attack: 0.18, at: t });
+      this.noise(5.5, { type: 'lowpass', freq: 2600, vol: 0.9, attack: 0.12, at: t });
+      this.noise(4.5, { type: 'lowpass', freq: 380, vol: 0.9, attack: 0.1, at: t });
+      for (let k = 0; k < 5; k++) this.voice(150 + k * 42, 3.8, { vowel: k % 2 ? 'a' : 'o', vol: 0.1, at: t + 0.05 * k, n: 8, attack: 0.15 });
+      this.audio.tone(55, 1.6, { type: 'sine', slideTo: 36, vol: 0.6, at: t });
       this.audio.horn();
       for (let k = 0; k < 10; k++) this.clapBurst(t + 3 + k * 0.5, 30, 0.5, 0.04);
       this.roarHold = 6;
@@ -153,16 +155,18 @@ export class SoccerAudio {
   ooh() {
     if (!this.ready) return;
     const t = this.ctx.currentTime;
-    this.voice(150, 1.6, { vowel: 'o', vol: 0.05, slideTo: 250, at: t, n: 8, attack: 0.3 });
-    this.noise(1.8, { freq: 500, sweepTo: 1100, q: 0.6, vol: 0.3, attack: 0.5, at: t });
+    this.voice(150, 1.7, { vowel: 'o', vol: 0.09, slideTo: 255, at: t, n: 8, attack: 0.3 });
+    this.voice(210, 1.7, { vowel: 'o', vol: 0.06, slideTo: 330, at: t + 0.08, n: 6, attack: 0.3 });
+    this.noise(1.9, { freq: 500, sweepTo: 1200, q: 0.45, vol: 0.7, attack: 0.5, at: t });
   }
 
   // 外れ: 「アァ…」下がる
   groan() {
     if (!this.ready) return;
     const t = this.ctx.currentTime;
-    this.voice(270, 1.4, { vowel: 'a', vol: 0.06, slideTo: 140, at: t, n: 8, attack: 0.05 });
-    this.noise(1.5, { freq: 1000, sweepTo: 350, q: 0.6, vol: 0.35, attack: 0.05, at: t });
+    this.voice(270, 1.5, { vowel: 'a', vol: 0.1, slideTo: 140, at: t, n: 8, attack: 0.05 });
+    this.voice(200, 1.5, { vowel: 'a', vol: 0.06, slideTo: 110, at: t + 0.05, n: 6, attack: 0.05 });
+    this.noise(1.6, { freq: 1000, sweepTo: 330, q: 0.45, vol: 0.8, attack: 0.05, at: t });
     this.clapBurst(t + 1.3, 20, 0.8, 0.025);
   }
 
@@ -178,8 +182,8 @@ export class SoccerAudio {
   }
 
   shot() {
-    this.audio.noiseHit(0.08, { type: 'lowpass', freq: 900, vol: 0.12, bus: this.stadium });
-    this.noise(0.9, { freq: 600, sweepTo: 1400, q: 0.6, vol: 0.4, attack: 0.08 });
+    this.audio.noiseHit(0.08, { type: 'lowpass', freq: 900, vol: 0.16, bus: this.stadium });
+    this.noise(0.9, { freq: 600, sweepTo: 1400, q: 0.45, vol: 0.75, attack: 0.08 });
   }
 
   // 笛: short / long / end（ピッ ピッ ピーーー）
@@ -304,9 +308,9 @@ export class SoccerAudio {
     this.roarHold = (this.roarHold ?? 0) * Math.exp(-dt * 0.5);
     const e = Math.max(0, Math.min(1, this.excite + Math.max(0, this.roarHold) * 0.1));
     const quiet = this.roarHold < -0.5 ? 0.55 : 1;
-    this.bed.g.gain.setTargetAtTime((0.16 + e * 0.16) * quiet, t, 0.3);
-    this.hiss.g.gain.setTargetAtTime((0.05 + e * 0.12) * quiet, t, 0.3);
-    this.roar.g.gain.setTargetAtTime(e * e * 0.35, t, 0.2);
+    this.bed.g.gain.setTargetAtTime((0.15 + e * 0.32) * quiet, t, 0.3);
+    this.hiss.g.gain.setTargetAtTime((0.05 + e * 0.2) * quiet, t, 0.3);
+    this.roar.g.gain.setTargetAtTime(e * e * 1.1, t, 0.2);
     this.roar.f.frequency.setTargetAtTime(600 + e * 700, t, 0.3);
     if (!playing) return;
     // チャント（盛り上がっていない時 = 応援で盛り上げる）
