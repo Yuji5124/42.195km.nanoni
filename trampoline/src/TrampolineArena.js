@@ -190,8 +190,9 @@ export class TrampolineArena {
     // 最上段の外壁（ぐるっと一周）
     const topR = ARENA.standR + ARENA.tiers * ARENA.depth;
     const topY = ARENA.y0 + (ARENA.tiers - 1) * ARENA.rise;
-    const wall = new THREE.Mesh(new THREE.CylinderGeometry(topR, topR, ROOF.y - topY + 2, ARENA.segs, 1, true), new THREE.MeshLambertMaterial({ color: 0x252a3a, side: THREE.BackSide }));
+    const wall = (this.wall = new THREE.Mesh(new THREE.CylinderGeometry(topR, topR, ROOF.y - topY + 2, ARENA.segs, 1, true), new THREE.MeshLambertMaterial({ color: 0x252a3a, side: THREE.BackSide })));
     wall.position.y = topY + (ROOF.y - topY + 2) / 2;
+    wall.material.side = THREE.DoubleSide; // 空から見下ろした時は外側が見える
     this.group.add(wall);
     // 客席の手すり（最前列の光るライン）
     const rail = new THREE.Mesh(new THREE.TorusGeometry(ARENA.standR - 0.05, 0.06, 4, 96).rotateX(Math.PI / 2), glow(0x39e6ff, 1.6));
@@ -365,7 +366,7 @@ export class TrampolineArena {
     const ring = new THREE.Group();
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
-      const bank = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.2), glow(0xfff6e0, 3));
+      const bank = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.2), glow(0xfff6e0, 1.9));
       bank.position.set(Math.cos(a) * (ROOF.open + 3), ROOF.y - 1.2, Math.sin(a) * (ROOF.open + 3));
       bank.lookAt(0, 0, 0);
       ring.add(bank);
@@ -439,12 +440,22 @@ export class TrampolineArena {
     this.shake = Math.max(this.shake, shake);
   }
 
+  // 会場の中身（観客席・観客・審判・トランポリン・照明）を描画するか。空の上では外側（屋根と外壁）だけ
+  setInterior(on) {
+    if (this.interior === on) return;
+    this.interior = on;
+    for (const c of this.group.children) {
+      if (c === this.roof || c === this.wall) continue;
+      c.visible = on;
+    }
+  }
+
   openRoof(open = true) {
     this.roofTarget = open ? 1 : 0;
   }
 
-  // gameDt: 世界の時間（スロー中は遅い）
-  update(gameDt, excitement) {
+  // gameDt: 世界の時間（スロー中は遅い）/ realDt: 実時間（屋根は世界が止まっていても動く）
+  update(gameDt, excitement, realDt = gameDt) {
     this.time += gameDt;
     this.crowdUniforms.uTime.value = this.time;
     this.crowdUniforms.uExcite.value = excitement;
@@ -510,7 +521,7 @@ export class TrampolineArena {
       this.hemi.color.setHSL((k * 0.8) % 1, 0.6, 0.72);
       if (k >= 1.12) {
         this.show = null;
-        banks.forEach((b) => b.material.color.setHex(0xfff6e0).multiplyScalar(3));
+        banks.forEach((b) => b.material.color.setHex(0xfff6e0).multiplyScalar(1.9));
         this.hemi.color.setHex(0xb8c4ff);
       }
     }
@@ -520,9 +531,9 @@ export class TrampolineArena {
     this.stands.position.set(Math.sin(this.time * 31) * 0.25 * s, Math.sin(this.time * 23) * 0.35 * s, Math.cos(this.time * 27) * 0.25 * s);
     // 屋根: 巨大な構造物なので、ゆっくり動き出してゆっくり止まる
     const target = this.roofTarget;
-    this.roofVel = damp(this.roofVel ?? 0, Math.sign(target - this.roofOpen) * 0.16, 1.2, gameDt);
+    this.roofVel = damp(this.roofVel ?? 0, Math.sign(target - this.roofOpen) * 0.2, 1.2, realDt);
     if (Math.abs(target - this.roofOpen) < 0.002) this.roofVel = 0;
-    this.roofOpen = clamp(this.roofOpen + this.roofVel * gameDt, 0, 1);
+    this.roofOpen = clamp(this.roofOpen + this.roofVel * realDt, 0, 1);
     const e = this.roofOpen * this.roofOpen * (3 - 2 * this.roofOpen);
     for (const p of this.panels) {
       p.position.x = p.userData.side * e * ROOF.panelShift;

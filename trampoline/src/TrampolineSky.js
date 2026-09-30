@@ -17,12 +17,25 @@ uniform vec3 uTop;
 uniform vec3 uHorizon;
 uniform vec3 uGlow;
 uniform float uGlowAmt;
+uniform float uDip; // 地平線がどれだけ下がるか（高度が高いほど地球が丸く、下に見える）
+uniform float uEarth; // 空の下半分に地球を描くか（0〜1）
 varying vec3 vDir;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 void main() {
   float h = vDir.y;
-  vec3 c = mix(uHorizon, uTop, smoothstep(-0.05, 0.6, h));
-  // 地平線の街あかり / 高い所では地球の縁の青い光
-  c += uGlow * uGlowAmt * exp(-abs(h + 0.02) * 9.0);
+  float hz = -sin(uDip);
+  vec3 c = mix(uHorizon, uTop, smoothstep(hz - 0.05, 0.6, h));
+  // 地平線の光（低い所では街あかり、高い所では大気の青い縁）
+  c += uGlow * uGlowAmt * exp(-abs(h - hz + 0.02) * 9.0);
+  // 地球（地平線より下）: 夜の地表 + 街あかりの粒
+  if (h < hz) {
+    vec2 q = vDir.xz / max(0.02, -h) * 26.0;
+    float lights = step(0.985, hash(floor(q))) * (0.5 + 0.5 * hash(floor(q * 0.37)));
+    vec3 earth = vec3(0.012, 0.018, 0.04) + vec3(1.0, 0.72, 0.42) * lights * 0.9;
+    float edge = smoothstep(hz, hz - 0.015, h);
+    c = mix(c, earth, uEarth * edge);
+    c += uGlow * uGlowAmt * uEarth * exp(-abs(h - hz) * 60.0) * 0.8;
+  }
   gl_FragColor = vec4(c, 1.0);
 }`;
 
@@ -33,6 +46,8 @@ export class TrampolineSky {
       uHorizon: { value: new THREE.Color(0x141a3a) },
       uGlow: { value: new THREE.Color(0xff9a4a) },
       uGlowAmt: { value: 0.35 },
+      uDip: { value: 0 },
+      uEarth: { value: 0 },
     };
     this.dome = new THREE.Mesh(
       new THREE.SphereGeometry(1900, 32, 16),
@@ -97,5 +112,9 @@ export class TrampolineSky {
     u.uGlowAmt.value = 0.35 + t * 0.5;
     this.starMat.opacity = 0.7 + t * 0.3;
     this.starMat.size = 2.2 + t * 0.8;
+    // 地球の丸み: 地平線の下がる角度 = acos(R / (R + h))
+    const R = 6371000;
+    u.uDip.value = Math.acos(R / (R + Math.max(0, alt)));
+    u.uEarth.value = alt > 200 ? 1 : 0;
   }
 }

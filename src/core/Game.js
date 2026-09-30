@@ -6,8 +6,19 @@ import { clamp, damp } from './math.js';
 import { getMode, MODE_ORDER } from '../modes/modes.js';
 
 // 800m、なのに。（別ページ）。#from-main があると、800m 側に「タイトルへ戻る」が出る
-const M800 = '800m';
-const URL_800M = './800m/index.html#from-main';
+// 別のページのモード（タイトルで選ぶとカードが光るだけ。スタートでそのページへ移動する）
+const EXTERNAL = {
+  '800m': {
+    url: './800m/index.html#from-main',
+    title: ['800m、', 'なのに。'],
+    note: '2周だけなのに、何回ゲーム変わるの？<br />12 人・400m トラック 2 周。SPACE / TAP で 800m のページへ移動します。',
+  },
+  trampoline: {
+    url: './trampoline/index.html#from-main',
+    title: ['トランポリン、', 'なのに。'],
+    note: '数秒しかない滞空時間に、ゲームを詰め込みすぎる。<br />踏み込んで跳び、空中で英単語をタイピング。SPACE / TAP でトランポリンのページへ移動します。',
+  },
+};
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';
 import { RunnerController } from '../race/RunnerController.js';
@@ -216,17 +227,17 @@ export class Game {
   }
 
   // タイトルでモードを切り替える（ワールドを作り直す）
-  //   800m は別のページ（800m/index.html）。選んでいる間はカードを光らせるだけで、スタートで移動する
+  //   800m / トランポリンは別のページ。選んでいる間はカードを光らせるだけで、スタートで移動する
   selectMode(id) {
     if (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT) return;
-    if (id === M800) {
-      this.pick800 = true;
-      this.ui.select800(true);
+    if (EXTERNAL[id]) {
+      this.pickExternal = id;
+      this.ui.selectExternal(id, EXTERNAL[id]);
       return;
     }
-    if (this.pick800) {
-      this.pick800 = false;
-      this.ui.select800(false, this.mode);
+    if (this.pickExternal) {
+      this.pickExternal = null;
+      this.ui.selectExternal(null, null, this.mode);
     }
     const mode = getMode(id);
     if (mode.id === this.modeId) return;
@@ -581,8 +592,8 @@ export class Game {
 
   startRace() {
     if (this.race.state !== RACE.TITLE && this.race.state !== RACE.RESULT) return;
-    if (this.pick800) {
-      location.href = URL_800M;
+    if (this.pickExternal) {
+      location.href = EXTERNAL[this.pickExternal].url;
       return;
     }
     this.audio.init();
@@ -719,8 +730,8 @@ export class Game {
     const { input, race } = this;
     if (input.pressed('mute')) this.audio.toggleMute();
     if (race.state === RACE.TITLE && (input.pressed('left') || input.pressed('right'))) {
-      const order = [...MODE_ORDER, M800];
-      const i = order.indexOf(this.pick800 ? M800 : this.modeId);
+      const order = [...MODE_ORDER, ...Object.keys(EXTERNAL)];
+      const i = order.indexOf(this.pickExternal ?? this.modeId);
       const next = order[(i + (input.pressed('right') ? 1 : order.length - 1)) % order.length];
       this.selectMode(next);
     }

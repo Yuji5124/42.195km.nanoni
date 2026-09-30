@@ -87,6 +87,30 @@ export class TrampolineAudio {
     this.a.noiseHit(1.1, { freq: 420, sweepTo: 760, q: 1.4, vol: Math.min(0.3, 0.1 * size), attack: 0.2 });
   }
 
+  // 天井が開く轟音（低いうなり + 金属の軋み + 警報のような和音）
+  roofRumble() {
+    const t = this.ctx?.currentTime;
+    if (t === undefined) return;
+    const a = this.a;
+    a.tone(38, 6.5, { type: 'sawtooth', vol: 0.16, attack: 1.2, cutoff: 180, at: t });
+    a.tone(57, 6, { type: 'sine', vol: 0.2, attack: 0.8, at: t + 0.2 });
+    a.noiseHit(6.5, { type: 'lowpass', freq: 260, sweepTo: 140, vol: 0.22, attack: 1, at: t });
+    for (let i = 0; i < 5; i++) a.tone(180 + i * 13, 0.9, { type: 'square', slideTo: 120, vol: 0.02, cutoff: 700, at: t + 1 + i * 1.1 });
+    [0, 3, 7].forEach((s) => a.tone(semi(s, 110), 2.8, { type: 'sawtooth', vol: 0.035, attack: 0.6, cutoff: 1200, at: t + 2.4 }));
+  }
+
+  // 観客のざわめき
+  murmur() {
+    const t = this.ctx?.currentTime;
+    if (t === undefined) return;
+    for (let i = 0; i < 6; i++) this.a.noiseHit(0.9, { freq: 380 + Math.random() * 400, q: 2.2, vol: 0.05, attack: 0.25, at: t + i * 0.3, pan: Math.random() * 1.6 - 0.8 });
+  }
+
+  // 空の風
+  wind(v = 1) {
+    this.a.noiseHit(1.6, { type: 'bandpass', freq: 260 + v * 300, sweepTo: 180, q: 0.6, vol: 0.06 * v, attack: 0.4 });
+  }
+
   // ---- クラシック（バレリーナ）: AudioManager のシーケンサーとは別に、ここで 3 拍子を刻む
   setBallet(on) {
     if (on === this.ballet) return;

@@ -7,6 +7,7 @@
 //   on        … いつ判定するか
 //               'attempt'（試技の開始）/ 'takeoff'（跳んだ）/ 'word'（単語を打ち終えた）/ 'air'（空中で毎フレーム）
 //               'descent'（落ち始め）/ 'sync'（背景と偶然一致）/ 'land'（着地）
+//               'super'（天井 OPEN 後の超反発）/ 'sky'（空の旅: 外に出た・高度のゾーン）
 //   level     … テンポ（0 普通 → 1 少し変 → 2 かなり変 → 3 意味不明 → 4 天井 OPEN・空）。これ未満では起きない
 //   condition … (ctx) => bool
 //   chance    … 起きる確率（1 回の判定ごと。'air' は 1 回の跳躍で 1 回だけ抽選）
@@ -18,7 +19,7 @@
 //   duration  … 秒（実時間）/ 'air'（着地まで）/ 'effect'（エフェクトが終わるまで）
 //   cameraMode… カメラのショット（TrampolineCameraDirector）
 //   timeScale … 空中のスローに掛ける倍率（バレリーナは世界がさらに遅くなる）
-//   score     … { cat, label, points }（points は数値か (ctx) => 数値）。scoreOn: 'land' なら着地の時に
+//   score     … { cat, label, points }（points は数値か (ctx) => 数値）。scoreOn: 'land' なら着地の時、'end' ならイベントの終わりに
 //   scoreIf   … 着地時に加点する条件（(ctx) => bool）
 //   message   … 大きな「〜なのに、〜！」（無ければ内訳に流れるだけ）
 //   comment   … 実況（真面目）
@@ -248,6 +249,110 @@ export const EVENTS = [
     holdCamera: true,
     effects: ['drama'],
     comment: '（中継は競技の模様をお伝えしています）',
+  },
+
+  // ---------------------------------------------------------------- 天井 OPEN → SKY JUMP → 帰還
+  {
+    id: 'ROOF_OPEN',
+    name: '天井 OPEN',
+    on: 'attempt',
+    level: 0,
+    once: true,
+    // 終盤（第 9 試技）か、なのにが続いた時（高コンボ）は第 7 試技から
+    condition: (c) => c.attempt >= 9 || (c.attempt >= 7 && c.eventCount >= 30),
+    duration: 'effect',
+    block: true,
+    cameraMode: 'ROOF',
+    holdCamera: true,
+    effects: ['roofOpen'],
+    scoreOn: 'end',
+    score: { cat: 'NANONI', label: '屋根が開いた、なのに競技続行', points: 2000 },
+    message: '屋根が開いた、<br>なのに競技続行。',
+  },
+  {
+    id: 'SUPER_BOUNCE',
+    name: '超反発',
+    on: 'super',
+    level: 0,
+    condition: (c) => c.superStage === 3,
+    score: { cat: 'NANONI', label: 'トランポリンなのに、超反発', points: 1500 },
+    message: 'トランポリンなのに、<br>超反発。',
+  },
+  {
+    id: 'SKY_JUMP',
+    name: '競技場から出た',
+    on: 'sky',
+    level: 0,
+    condition: (c) => c.skyEvent === 'exit',
+    score: { cat: 'NANONI', label: '競技場から出た', points: 5000 },
+    message: '競技場から出た！',
+    comment: '……選手が、競技場の外に出ました。採点は継続します。',
+  },
+  {
+    id: 'ZONE_CLOUD',
+    name: '雲の上',
+    on: 'sky',
+    level: 0,
+    condition: (c) => c.zone === 'CLOUD',
+    score: { cat: 'BACKGROUND', label: '雲を抜けた', points: 800 },
+    comment: '雲を抜けました。',
+  },
+  {
+    id: 'ZONE_SKY',
+    name: '上空',
+    on: 'sky',
+    level: 0,
+    condition: (c) => c.zone === 'SKY',
+    score: { cat: 'TECHNIQUE', label: '高度 4,000m', points: 1000 },
+    comment: '高度 4,000 メートル。審判団は通常どおり採点しています。',
+  },
+  {
+    id: 'ZONE_STRATOSPHERE',
+    name: '成層圏',
+    on: 'sky',
+    level: 0,
+    condition: (c) => c.zone === 'STRATOSPHERE',
+    score: { cat: 'TECHNIQUE', label: '成層圏', points: 1500 },
+    comment: '成層圏です。',
+  },
+  {
+    id: 'ZONE_SPACE',
+    name: '宇宙',
+    on: 'sky',
+    level: 0,
+    condition: (c) => c.zone === 'SPACE',
+    score: { cat: 'NANONI', label: '宇宙なのに、トランポリンの採点中', points: 3000 },
+    message: '宇宙なのに、<br>トランポリンの採点中。',
+    comment: '……宇宙です。第 9 試技は継続中です。',
+  },
+  {
+    id: 'PERFECT_RETURN',
+    name: 'PERFECT RETURN',
+    on: 'land',
+    level: 0,
+    condition: (c) => c.fromSky && c.returnGrade === 'PERFECT' && !c.failed,
+    effects: ['crowdJump'],
+    score: { cat: 'LANDING', label: 'PERFECT RETURN', points: 10000 },
+    message: 'PERFECT RETURN',
+    comment: '着地、中央です。',
+  },
+  {
+    id: 'RETURN',
+    name: '帰還',
+    on: 'land',
+    level: 0,
+    condition: (c) => c.fromSky && (c.returnGrade === 'GOOD' || (c.returnGrade === 'PERFECT' && c.failed)),
+    score: { cat: 'LANDING', label: 'RETURN', points: 4000 },
+    message: '帰ってきた！',
+  },
+  {
+    id: 'RETURN_EDGE',
+    name: 'はしっこに帰還',
+    on: 'land',
+    level: 0,
+    condition: (c) => c.fromSky && c.returnGrade === 'EDGE',
+    score: { cat: 'NANONI', label: 'はしっこに帰ってきた、なのに', points: 2000 },
+    message: 'はしっこに帰ってきた、<br>なのに。',
   },
 
   // ---------------------------------------------------------------- 失敗も点になる

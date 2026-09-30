@@ -123,6 +123,45 @@ export const EFFECTS = {
     },
   },
 
+  // 天井 OPEN: 時間がほぼ止まる → 轟音 → 観客がざわつく → 屋根が左右へ開く → 夜空 → 「競技は続行します」
+  roofOpen: {
+    start(m, inst) {
+      m.time.to(0.04, 3);
+      m.sfx.roofRumble();
+      m.audio.hush(1.4);
+      m.audio.setMusic(null);
+      m.hud.comment('……屋根が、開きます。', 3.2);
+      m.arena.openRoof(true);
+      inst.data.step = 0;
+    },
+    update(m, inst) {
+      const d = inst.data;
+      if (d.step === 0 && inst.t > 1.4) {
+        d.step = 1;
+        m.sfx.murmur();
+        m.arena.flashStorm(3);
+        m.cheer.hype(0.5);
+        m.hud.caption('（ざわ……）', 2);
+      }
+      if (d.step === 1 && inst.t > 3.6) {
+        d.step = 2;
+        // 観客席の上に、開いていく屋根と夜空
+        m.cam.lookPoint.set(0, 44, -34);
+        m.cam.set('LOOK', { dur: 1.6 });
+      }
+      if (d.step === 2 && inst.t > 6.4) {
+        d.step = 3;
+        m.hud.comment('競技は、続行します。', 3);
+      }
+      if (inst.t > 7.4) inst.done = true;
+    },
+    end(m) {
+      m.time.to(1, 2);
+      m.skyReady = true;
+      m.cam.set('WIDE', { dur: 1 });
+    },
+  },
+
   // 観客ドラマ: 競技を無視して観客席の 2 人を映す
   drama: {
     start(m, inst) {

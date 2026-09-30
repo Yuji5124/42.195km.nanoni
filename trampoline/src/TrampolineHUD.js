@@ -45,6 +45,8 @@ export class TrampolineHUD {
       final: $('final'),
       intro: $('intro'),
       pause: $('pause'),
+      radar: $('radar'),
+      radarDot: $('radarDot'),
       muteBtn: $('muteBtn'),
     };
     this.commentT = 0;
@@ -95,7 +97,8 @@ export class TrampolineHUD {
       this.el.wordText.innerHTML = `<b>${done}</b><u>${next}</u><i>${rest}</i>`;
       this.el.wordName.textContent = typing.def?.name ?? '';
       const chain = typing.done.map((d) => d.word);
-      this.el.chain.textContent = chain.length ? chain.join(' · ') : '';
+      // 長くなったら最後の 8 語だけ
+      this.el.chain.textContent = chain.length > 8 ? `… ${chain.slice(-8).join(' · ')}  ×${chain.length}` : chain.join(' · ');
       if (touch) this.showKeys(typing.choices());
     }
     if (typing.missFlash > 0) {
@@ -122,6 +125,12 @@ export class TrampolineHUD {
 
   showSteer(on) {
     this.el.steer.classList.toggle('hidden', !on);
+  }
+
+  // 空から帰る時のずれ（x: -1〜1）
+  radar(on, x = 0) {
+    this.el.radar.classList.toggle('hidden', !on);
+    if (on) this.el.radarDot.style.transform = `translateX(${(x * 110).toFixed(1)}px)`;
   }
 
   // ---- 得点の内訳（右に流れる）
@@ -186,13 +195,23 @@ export class TrampolineHUD {
   // ---- 試技の結果（内訳・審判・合計）
   showResult(rec, attempt, of, total) {
     const el = this.el.result;
-    const rows = rec.items
+    // 項目が多すぎる時（空の旅など）: 大きい順に 10 項目 + 「その他」
+    let items = rec.items;
+    // 画面の高さに入る行数（小さい画面ほど少なく）
+    const rows = Math.max(4, Math.min(12, Math.floor((window.innerHeight - 330) / 24)));
+    if (items.length > rows) {
+      const keep = new Set([...items].sort((a, b) => b.points - a.points).slice(0, rows - 1));
+      const rest = items.filter((i) => !keep.has(i));
+      items = items.filter((i) => keep.has(i));
+      items.push({ cat: 'TECHNIQUE', label: `その他 ${rest.length} 項目`, points: rest.reduce((s, i) => s + i.points, 0) });
+    }
+    const list = items
       .map((i) => `<li class="cat-${i.cat.toLowerCase()}"><span>${i.label}</span><b>${i.points >= 0 ? '+' : ''}${fmt(i.points)}</b></li>`)
       .join('');
     el.innerHTML = `
       <div class="r-head"><span>ATTEMPT ${attempt}/${of}</span><span>侍 SAMURAI · JPN</span></div>
       <div class="r-judges">${rec.cards.map((c) => `<i>${c.toFixed(1)}</i>`).join('')}<em>E ${rec.official.toFixed(2)}</em></div>
-      <ul>${rows}</ul>
+      <ul>${list}</ul>
       <div class="r-sum"><span>SCORE</span><b>${fmt(rec.sum)}</b></div>
       <div class="r-total"><span>TOTAL</span><b>${fmt(total)}</b></div>`;
     el.classList.remove('hidden');

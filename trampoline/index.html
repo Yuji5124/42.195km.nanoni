@@ -43,6 +43,12 @@
         <div id="chain" class="w-chain"></div>
       </div>
       <div id="keys" class="keys hidden"></div>
+      <!-- 空から帰る時: 会場（中心）と自分のずれ -->
+      <div id="radar" class="radar hidden">
+        <div class="rd-label">RETURN</div>
+        <div class="rd-field"><i class="rd-target"></i><b id="radarDot"></b></div>
+        <div class="rd-hint">← → で会場の真上へ</div>
+      </div>
       <div id="steer" class="steer hidden">
         <button data-steer="-1">◀</button>
         <button data-steer="1">▶</button>

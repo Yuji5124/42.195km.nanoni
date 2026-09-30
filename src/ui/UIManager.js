@@ -69,13 +69,13 @@ export class UIManager {
     this.el.progSlice.style.left = `${(goalKm / fullKm) * 100}%`;
   }
 
-  // タイトルで 800m（別ページ）を選んでいる間の表示。on=false でいまのモードの表示に戻す
-  select800(on, mode = this.mode) {
-    document.querySelectorAll('[data-mode]').forEach((c) => c.classList.toggle('selected', on ? c.dataset.mode === '800m' : c.dataset.mode === mode?.id));
-    if (on) {
-      $('titleA').textContent = '800m、';
-      $('titleB').textContent = 'なのに。';
-      $('titleNote').innerHTML = '2周だけなのに、何回ゲーム変わるの？<br />12 人・400m トラック 2 周。SPACE / TAP で 800m のページへ移動します。';
+  // タイトルで別ページのモード（800m / トランポリン）を選んでいる間の表示。id=null でいまのモードの表示に戻す
+  selectExternal(id, info, mode = this.mode) {
+    document.querySelectorAll('[data-mode]').forEach((c) => c.classList.toggle('selected', id ? c.dataset.mode === id : c.dataset.mode === mode?.id));
+    if (id) {
+      $('titleA').textContent = info.title[0];
+      $('titleB').textContent = info.title[1];
+      $('titleNote').innerHTML = info.note;
     } else if (mode) {
       $('titleA').textContent = mode.title[0];
       $('titleB').textContent = mode.title[1];

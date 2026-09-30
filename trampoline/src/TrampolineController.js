@@ -112,9 +112,17 @@ export class TrampolineController {
   }
 
   // gameDt: 世界の時間 / stomp: 踏み込み中 / hurry: 着地が近い時に回転を急ぐ（0〜1）/ boost: 回転の速さの倍率（連続入力）
-  update(gameDt, { stomp = false, hurry = 0, boost = 1 } = {}) {
+  // freeze: 空の旅の間は物理を止める（高さは TrampolineSkyJump が世界の側を動かして表す）
+  // onEvent: 物理のできごと（touch / bottom / takeoff）をその場で受け取る。
+  //   ばねが硬いので 1/120 秒ずつに刻んで計算し、底で決めた跳ぶ速さが同じフレームの離陸に間に合うようにする
+  update(gameDt, { stomp = false, hurry = 0, boost = 1, freeze = false, onEvent = null } = {}) {
     const ph = this.physics;
-    const events = ph.step(gameDt, stomp);
+    if (!freeze && gameDt > 0) {
+      const n = Math.min(24, Math.ceil(gameDt * 120));
+      for (let i = 0; i < n; i++) {
+        for (const ev of ph.step(gameDt / n, stomp)) onEvent?.({ ...ev });
+      }
+    }
     const air = !ph.contact;
     // 回転: 目標の角度へ（速さの上限 = 技の回りやすさ）
     const chase = (cur, target, maxV) => {
@@ -146,7 +154,6 @@ export class TrampolineController {
     this.landT = Math.max(0, this.landT - gameDt);
     this.failT = Math.max(0, this.failT - gameDt);
     this.place(gameDt, air);
-    return events;
   }
 
   place(gameDt, air) {

@@ -25,8 +25,8 @@ export class TrampolineInput {
     });
     window.addEventListener('keyup', (e) => this.down.delete(e.code));
     window.addEventListener('blur', () => this.down.clear());
-    // 画面タップ = 踏み込み（ボタンの上は除く）
-    root.addEventListener('pointerdown', (e) => {
+    // 画面タップ = 踏み込み（ボタンの上は除く）。HUD は pointer-events: none なので、canvas も含めて window で受ける
+    window.addEventListener('pointerdown', (e) => {
       if (e.target.closest('button, a, [data-key], [data-steer]')) return;
       this.pressedSet.add('Tap');
     });

@@ -2,7 +2,7 @@
   "name": "42195km-nanoni",
   "private": true,
   "version": "0.1.0",
-  "description": "42.195km、なのに。/ 1500m、なのに。/ 800m、なのに。 — 東京 × 陸上 × デジタル × バカゲー (Three.js)",
+  "description": "42.195km、なのに。/ 1500m、なのに。/ 800m、なのに。/ トランポリン、なのに。 — 東京 × 陸上 × デジタル × バカゲー (Three.js)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,9 @@
     "filmstrip": "vite build && node 800m/tools/filmstrip.mjs",
     "benchmark": "vite build && node 800m/tools/benchmark.mjs",
     "gallery": "vite build && node 800m/tools/gallery.mjs",
-    "mobile": "vite build && node 800m/tools/mobile.mjs"
+    "mobile": "vite build && node 800m/tools/mobile.mjs",
+    "tramp:smoke": "vite build && node trampoline/tools/smoke.mjs",
+    "tramp:shots": "vite build && node trampoline/tools/shots.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

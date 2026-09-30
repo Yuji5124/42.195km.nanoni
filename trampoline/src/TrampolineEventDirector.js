@@ -20,6 +20,22 @@ export class TrampolineEventDirector {
     this.beginJump();
   }
 
+  // 表の食い違いを探す（テスト用）: 重複した id・知らない on・無いエフェクト・点の形
+  problems() {
+    const ON = ['attempt', 'takeoff', 'word', 'air', 'descent', 'sync', 'land', 'super', 'sky'];
+    const out = [];
+    const ids = new Set();
+    for (const e of this.events) {
+      if (ids.has(e.id)) out.push(`${e.id}: id が重複`);
+      ids.add(e.id);
+      if (!ON.includes(e.on)) out.push(`${e.id}: on '${e.on}' は無い`);
+      for (const f of e.effects ?? []) if (!this.effects[f]) out.push(`${e.id}: effect '${f}' が無い`);
+      if (e.score && (!e.score.cat || !e.score.label || e.score.points === undefined)) out.push(`${e.id}: score の形`);
+      if (e.on === 'sync' && !e.kind) out.push(`${e.id}: sync なのに kind が無い`);
+    }
+    return out;
+  }
+
   force(id) {
     if (this.byId[id]) this.forced.add(id);
   }
@@ -109,10 +125,8 @@ export class TrampolineEventDirector {
     if (ev.comment) m.hud.comment(ev.comment, 3.4);
     for (const name of ev.effects ?? []) this.effects[name]?.start?.(m, inst);
     if (ev.timeScale) m.applyAirScale();
-    if (ev.score) {
-      if (ev.scoreOn === 'land') this.jump.deferred.push(inst);
-      else this.award(inst, ctx);
-    }
+    if (ev.score && !ev.scoreOn) this.award(inst, ctx);
+    else if (ev.score && ev.scoreOn === 'land') this.jump.deferred.push(inst);
     m.onEvent?.(ev, inst);
     return true;
   }
@@ -147,13 +161,15 @@ export class TrampolineEventDirector {
     for (const a of this.active) {
       a.t += realDt;
       for (const name of a.ev.effects ?? []) this.effects[name]?.update?.(m, a, realDt);
-      if (typeof a.ev.duration === 'number' && a.t >= a.ev.duration) a.done = true;
+      // duration が無いイベントは一瞬（点と文字だけ）
+      if (a.ev.duration === undefined || (typeof a.ev.duration === 'number' && a.t >= a.ev.duration)) a.done = true;
     }
     if (!this.active.some((a) => a.done)) return;
     const ending = this.active.filter((a) => a.done);
     this.active = this.active.filter((a) => !a.done);
     for (const a of ending) {
       for (const name of a.ev.effects ?? []) this.effects[name]?.end?.(m, a);
+      if (a.ev.score && a.ev.scoreOn === 'end') this.award(a, m.eventCtx({}));
       if (a.ev.timeScale) m.applyAirScale();
       // このイベントがカメラを動かしていたら、今の場面のカメラへ戻す
       if (a.ev.cameraMode && m.cam.shot === a.ev.cameraMode) m.cam.set(m.defaultShot(), { dur: 0.5 });

@@ -23,11 +23,14 @@ import { TrampolineBackground } from './TrampolineBackground.js';
 import { TrampolineSky } from './TrampolineSky.js';
 import { TrampolineGhosts } from './TrampolineGhosts.js';
 import { TrampolineDrama } from './TrampolineDrama.js';
+import { TrampolineSkyJump, BASE, PEAK } from './TrampolineSkyJump.js';
+import { BED } from './TrampolinePhysics.js';
 
 // 『トランポリン、なのに。』のモード本体（状態の流れとループ）。
 //
 //   intro → ready → bounce（小さく弾む。SPACE で踏み込み）→ air（スロー + タイピング）→ landed → result → 次の試技
 //   10 回の試技のあと final。
+//   天井 OPEN 後: bounce → super（超反発 10m → 30m → 50m）→ sky（空の旅）→ return（会場へ落ちてくる）→ landed
 //
 // 「なのに」の演出はすべて data/events.js（表）→ TrampolineEventDirector（いつ起こすか）→ TrampolineEffects（中身）。
 // このファイルは「今、跳んだ / 打ち終えた / 落ち始めた / 着地した」を司令塔へ伝えるだけ。
@@ -41,6 +44,9 @@ const TAU = Math.PI * 2;
 
 // 何もしない時の弾み（ウォームアップで少しずつ高く）
 const WARMUP = [0.7, 1.1, 1.5, 1.8];
+// 天井 OPEN 後の超反発（m）。最後の 1 回で屋根より高く → 空へ
+const SUPER = [10, 30, 50, 160];
+const SUPER_CALL = ['10 メートル。', '30 メートル。', '50 メートル……屋根の高さを超えています。', ''];
 
 // 試技ごとの実況（真面目）
 const CALLS = [
@@ -102,6 +108,11 @@ export class TrampolineMode {
     this.fxPlayer = { s: 0, x: 0, y: 0, dashing: false, boostTimer: 0, grounded: true };
     this.fx = new EffectManager(renderer, scene, this.camera, path);
 
+    // world: 会場まるごと（空の旅ではこれを縮めて下げる）。選手・背景・空は world の外
+    this.world = new THREE.Group();
+    scene.add(this.world);
+    this.world.add(this.arena.group, this.arena.ground);
+    this.skyJump = new TrampolineSkyJump(this.world, this.arena, this.rng);
     this.sky = new TrampolineSky(scene);
     this.bg = new TrampolineBackground(scene, this.arena, this.rng);
     this.ghosts = new TrampolineGhosts(scene, this.athlete, isTouch ? 3 : 4);
@@ -214,13 +225,14 @@ export class TrampolineMode {
     this.setPhase('ready');
     this.scoring.begin();
     this.director.beginJump();
-    this.director.moment('attempt');
     this.hud.setAttempt(this.attempt, ATTEMPTS);
     this.hud.setStats({ height: 0, rotation: 0, landing: '-', score: 0 });
     this.arena.drawBoard({ name: 'SAMURAI  JPN', attempt: this.attempt, of: ATTEMPTS, last: this.scoring.history.at(-1)?.sum ?? 0, total: this.scoring.total });
     this.hud.comment(CALLS[(this.attempt - 1) % CALLS.length].replace('{n}', this.attempt), 2.6);
     // 試技の前は中継らしく、ときどき別の角度から
     this.cam.set(this.attempt % 3 === 0 ? 'JUDGE' : this.attempt % 3 === 1 ? 'WIDE' : 'HIGH', { dur: 1.1 });
+    this.superStage = 0;
+    this.director.moment('attempt'); // 天井 OPEN はここ
     this.warm = 0;
     this.athlete.physics.setNextApex(WARMUP[0]);
     this.stompArmed = false;
@@ -267,7 +279,8 @@ export class TrampolineMode {
     const q = this.stompQ;
     this.stompArmed = false;
     this.stompFired = true;
-    const apex = lerp(3.2, 8.4, Math.pow(q, 0.8)) * (this.apexMul ?? 1);
+    // 天井が開いたあとは、どんな踏み込みでも超反発（10m から）
+    const apex = this.skyReady ? SUPER[0] : lerp(3.2, 8.4, Math.pow(q, 0.8));
     ph.launchV = Math.sqrt(2 * PHYS.g * apex);
     this.time.hit(0.06 + q * 0.07);
     this.cam.shake(0.35 + q * 0.5);
@@ -290,7 +303,7 @@ export class TrampolineMode {
     // スローの強さ: 「ゆっくりな部分」が実時間で budget 秒になるように決める（= 入力できる時間）
     const tUp = ev.v / PHYS.g;
     const tFall = Math.sqrt((2 * 0.6 * apex) / PHYS.g);
-    const budget = lerp(4.2, 6.8, q);
+    const budget = lerp(4.2, 6.8, q) * (this.input.isTouch ? 1.35 : 1); // スマホはボタンで打つので少し長く
     const slow = clamp((tUp + tFall) / budget, 0.06, 0.3);
     this.air = { apex, maxH: 0, q, slow, slowMul: 1, descent: false, t: 0, faceT: 1.05, wordAt: -9 };
     this.time.to(slow, 9);
@@ -345,6 +358,12 @@ export class TrampolineMode {
         return this.director.isActive('BALLERINA') ? 'ORBIT' : 'WIDE';
       case 'result':
         return 'RESULT';
+      case 'super':
+        return 'HIGH';
+      case 'sky':
+        return this.skyJump.stage === 'fall' ? 'DOWN' : 'SKY';
+      case 'return':
+        return 'TELE';
       case 'intro':
       case 'final':
         return 'INTRO';
@@ -373,6 +392,9 @@ export class TrampolineMode {
       failed: this.landing === 'FAIL',
       typedNothing: !sum.correct && !sum.miss,
       words: sum.words,
+      eventCount: this.director.count,
+      superStage: this.superStage ?? 0,
+      zone: this.skyJump?.zone,
       ...extra,
     };
   }
@@ -457,6 +479,109 @@ export class TrampolineMode {
     this.director.moment('word', { word, fast });
   }
 
+  // ------------------------------------------------------------------
+  // SKY JUMP（天井 OPEN のあと）
+  // ------------------------------------------------------------------
+  startSky() {
+    this.setPhase('sky');
+    const ph = this.athlete.physics;
+    ph.y = BASE + BED.top;
+    ph.vy = 0;
+    this.skyJump.start();
+    this.bg.clearJump();
+    // 会場に残っている紙吹雪・火花は消す（世界が動くので、空中に浮いて見えてしまう）
+    this.fx.sparks.clear();
+    this.fx.confetti.clear();
+    this.bg.sparks.clear();
+    this.air = { apex: PEAK, maxH: 0, q: 1, slow: 0.6, slowMul: 1, descent: false, t: 0, faceT: 0, wordAt: -9, fromSky: true };
+    this.time.to(0.6, 3);
+    this.typing.begin(2, this.time.real, 'FLIP');
+    this.athlete.setTargets({ flip: 0, twist: 0, spin: 0 });
+    this.director.moment('sky', { skyEvent: 'exit' });
+    this.cam.set('TELE', { cut: true });
+    this.skyShotT = 0;
+    this.audio.setMusic('tension');
+    this.sfx.wind(1.5);
+  }
+
+  updateSky(realDt) {
+    const a = this.air;
+    const sj = this.skyJump;
+    a.t += realDt;
+    for (const ch of this.input.takeLetters()) this.typeKey(ch);
+    this.autoType(realDt);
+    this.athlete.setTargets(this.typing.targets());
+    this.athlete.setTrick(this.currentTrick());
+    let steer = this.input.steer;
+    if (this.auto && sj.stage === 'fall') steer = clamp(sj.drift.x * 0.9, -1, 1);
+    const ev = sj.update(realDt, steer);
+    a.maxH = Math.max(a.maxH, sj.alt);
+    this.sky.setAltitude(sj.alt);
+    this.hud.zone(sj.zone);
+    if (ev === 'zone') this.director.moment('sky', { zone: sj.zone });
+    if (ev === 'peak') {
+      this.hud.comment('最高点です。', 2.4);
+      this.audio.setMusic(null);
+    }
+    if (ev === 'fall') {
+      this.hud.comment('戻ってきます。', 2.6);
+      this.cam.set('DOWN', { dur: 1.2 });
+      this.audio.setMusic('tension');
+    }
+    // 上りは横から → 超望遠 → 横から… と中継が切り替わる。帰りは真上から（帰る場所が見える）
+    this.skyShotT += realDt;
+    if (sj.stage === 'rise' && this.skyShotT > 3) {
+      this.skyShotT = 0;
+      // 超望遠は低い所だけ（高すぎると点にしか見えない）
+      const next = this.cam.shot === 'SKY' && sj.alt < 3000 ? 'TELE' : 'SKY';
+      if (next !== this.cam.shot) this.cam.set(next, { cut: true });
+    }
+    if (sj.stage === 'hang' && this.cam.shot !== 'SKY') this.cam.set('SKY', { dur: 1 });
+    const falling = sj.stage === 'fall';
+    this.hud.radar(falling, sj.radar().x);
+    this.hud.showSteer(falling && this.input.isTouch);
+    if (this.phaseT % 2.2 < realDt) this.sfx.wind(falling ? 1.4 : 1);
+    this.hud.showWord(this.typing, { touch: this.input.isTouch && !falling });
+    if (ev === 'enter') this.endSky();
+  }
+
+  // 会場の上空 60m まで戻ってきた → ここからは本物の物理で落ちる（超望遠・観客が静まる）
+  endSky() {
+    const sj = this.skyJump;
+    this.returnGrade = sj.returnGrade;
+    this.returnDrift = sj.drift.x;
+    sj.stop();
+    this.sky.setAltitude(0);
+    this.hud.zone(null);
+    this.hud.radar(false);
+    this.hud.showSteer(false);
+    this.typing.end();
+    this.hud.hideWord();
+    // 落ちてくる間に回転を 1 回転の倍数へそろえる（途中の単語の分は回りきる）
+    const ath = this.athlete;
+    ath.setTargets({ flip: Math.round(ath.flipTarget / TAU), twist: Math.round(ath.twistTarget / TAU), spin: Math.round(ath.spinTarget / TAU) });
+    ath.setTrick(null);
+    const ph = ath.physics;
+    ph.y = BASE + BED.top;
+    ph.vy = -22;
+    ph.contact = false;
+    this.athlete.x = clamp(this.returnDrift, -6, 6);
+    this.setPhase('return');
+    this.time.to(0.45, 4);
+    this.cam.set('TELE', { cut: true });
+    this.audio.setMusic(null);
+    this.audio.hush(2.4);
+    this.hud.comment('……戻ってきました。', 2.6);
+  }
+
+  updateReturn(realDt) {
+    // 戻ってくる場所: 中央 / 少しずれ / はしっこ
+    const g = this.returnGrade;
+    const tx = g === 'PERFECT' ? 0 : g === 'GOOD' ? Math.sign(this.returnDrift) * 1.0 : Math.sign(this.returnDrift) * 2.05;
+    this.athlete.x += (tx - this.athlete.x) * Math.min(1, realDt * 2.5);
+    if (this.athlete.physics.height < 14 && this.cam.shot === 'TELE') this.cam.set('WIDE', { dur: 0.6 });
+  }
+
   // 着地
   land(ev) {
     const a = this.air;
@@ -465,7 +590,8 @@ export class TrampolineMode {
     t.end();
     this.hud.hideWord();
     const err = ath.landingError();
-    const grade = err < 0.1 ? 'PERFECT' : err < 0.24 ? 'GOOD' : err < 0.42 ? 'OK' : 'FAIL';
+    let grade = err < 0.1 ? 'PERFECT' : err < 0.24 ? 'GOOD' : err < 0.42 ? 'OK' : 'FAIL';
+    if (a.fromSky && this.returnGrade === 'EDGE') grade = 'FAIL'; // はしっこ: 転ぶ
     const failed = grade === 'FAIL';
     const revs = (Math.abs(ath.flip) + Math.abs(ath.twist) + Math.abs(ath.spin)) / TAU;
     a.revs = revs;
@@ -478,7 +604,17 @@ export class TrampolineMode {
     else this.sfx.land(grade === 'PERFECT');
     this.scoreJump(err, grade, a);
     this.director.land();
-    this.director.moment('land');
+    this.director.moment('land', { fromSky: !!a.fromSky, returnGrade: this.returnGrade });
+    if (a.fromSky) {
+      // 帰ってきた: 屋根は何事もなかったように閉まる
+      this.arena.openRoof(false);
+      this.skyReady = false;
+      this.superStage = 0;
+      this.audio.cheerSwell(4);
+      this.audio.applause();
+      this.cheer.hype(0.8);
+      this.athlete.x = 0;
+    }
     this.bg.clearJump();
     const sum = this.scoring.attemptSum;
     this.cheer.hype(clamp(sum / 9000, 0.05, 0.6));
@@ -490,7 +626,8 @@ export class TrampolineMode {
   scoreJump(err, grade, a) {
     const s = this.scoring;
     const sum = this.typing.summary();
-    s.add('TECHNIQUE', `HEIGHT ${a.maxH.toFixed(1)}m`, a.maxH * 100);
+    if (a.fromSky) s.add('TECHNIQUE', `HEIGHT ${(a.maxH / 1000).toFixed(1)}km`, 3000);
+    else s.add('TECHNIQUE', `HEIGHT ${a.maxH.toFixed(1)}m`, a.maxH * 100);
     // 打ち終わった単語（同じ単語はまとめる）
     const counts = {};
     for (const w of sum.words) counts[w] = (counts[w] ?? 0) + 1;
@@ -539,6 +676,7 @@ export class TrampolineMode {
   finishAttempt() {
     const rec = this.scoring.finish(this.execution ?? 8, () => this.rng.next());
     this.setPhase('result');
+    this.hud.clearFeed(); // 内訳は結果の表にまとめて出る
     this.hud.showResult(rec, this.attempt, ATTEMPTS, this.scoring.total);
     this.hud.setTotal(this.scoring.total);
     this.judges.show(rec.cards);
@@ -596,15 +734,16 @@ export class TrampolineMode {
     const ath = this.athlete;
     const ph = ath.physics;
     const input = this.input;
-    if (this.phase !== 'air') input.takeLetters();
-    if (input.pressed('KeyM') && this.phase !== 'air') this.audio.toggleMute();
+    const typingPhase = this.phase === 'air' || this.phase === 'sky';
+    if (!typingPhase) input.takeLetters();
+    if (input.pressed('KeyM') && !typingPhase) this.audio.toggleMute();
 
     switch (this.phase) {
       case 'intro':
         if (input.confirm()) this.startGame();
         break;
       case 'ready':
-        if (this.phaseT > 1.4) {
+        if (this.phaseT > 1.4 && !this.director.blocking) {
           this.setPhase('bounce');
           this.cam.set('WIDE', { dur: 0.8 });
         }
@@ -624,6 +763,18 @@ export class TrampolineMode {
       case 'air':
         this.updateAir(realDt);
         break;
+      case 'super': {
+        // 超反発の間は世界を少し早送り（待たせない）。最後の 1 回で 60m を超えたら空へ
+        this.time.to(1.7, 4);
+        if (this.superStage === SUPER.length - 1 && ph.y > BASE + BED.top && ph.vy > 0) this.startSky();
+        break;
+      }
+      case 'sky':
+        this.updateSky(realDt);
+        break;
+      case 'return':
+        this.updateReturn(realDt);
+        break;
       case 'landed':
         // 観客ドラマの途中なら、終わるまで待つ（選手は背景で跳び続ける）
         if (this.phaseT > (this.landing === 'FAIL' ? 2.4 : 1.7) && !this.director.blocking) this.finishAttempt();
@@ -642,9 +793,8 @@ export class TrampolineMode {
     const hurry = this.phase === 'air' && ph.vy < 0 ? clamp(1 - ph.timeToLand() / 0.45, 0, 1) : 0;
     const boost = 1 + Math.min(3, this.typing.fastWords * 0.5);
     const wasContact = ph.contact;
-    const events = ath.update(gameDt, { stomp: stompHeld, hurry, boost });
+    ath.update(gameDt, { stomp: stompHeld, hurry, boost, freeze: this.phase === 'sky', onEvent: (ev) => this.onPhysics(ev) });
     this.contactT = ph.contact ? (wasContact ? this.contactT + gameDt : 0) : 0;
-    for (const ev of events) this.onPhysics(ev);
     this.ghosts.update(gameDt);
     // 背景（勝手に動いている）→ 偶然の一致
     const trick = ath.trick;
@@ -663,22 +813,23 @@ export class TrampolineMode {
     }
     this.bed.update(gameDt, ph.d, ath.x, ath.z);
     this.cheer.update(gameDt, { running: false, crowdDensity: 0.7 });
-    this.arena.update(gameDt, this.cheer.excitement);
+    this.arena.update(gameDt, this.cheer.excitement, realDt);
     this.judges.update(realDt);
     this.drama.update(realDt, this.hud);
     this.director.update(realDt);
 
     // ---- HUD
-    if (this.phase === 'air' || this.phase === 'landed' || this.phase === 'bounce') {
+    if (['air', 'landed', 'bounce', 'super', 'sky', 'return'].includes(this.phase)) {
       const revs = (Math.abs(ath.flip) + Math.abs(ath.twist) + Math.abs(ath.spin)) / TAU;
-      this.hud.setStats({ height: this.phase === 'air' ? ph.height : this.air?.maxH ?? ph.height, rotation: revs, landing: this.landing, score: this.scoring.attemptSum });
+      const h = this.phase === 'sky' ? this.skyJump.alt : this.phase === 'landed' ? this.air?.maxH ?? ph.height : ph.height;
+      this.hud.setStats({ height: h, rotation: revs, landing: this.landing, score: this.scoring.attemptSum });
     }
     if (this.phase !== 'bounce') this.hud.meter(false);
     this.hud.update(realDt);
 
     // ---- カメラ（realDt）
     ath.com(this._com ?? (this._com = new THREE.Vector3()));
-    this.cam.update(realDt, { com: this._com, head: ath.headPos, headFwd: ath.headFwd, headUp: ath.headUp, faceDir: ath.faceDir, height: ph.height, airborne: ath.airborne });
+    this.cam.update(realDt, { com: this._com, head: ath.headPos, headFwd: ath.headFwd, headUp: ath.headUp, faceDir: ath.faceDir, height: ph.height, airborne: ath.airborne, world: this.world });
     this.sky.follow(this.camera);
 
     // ---- 音・エフェクト（realDt）
@@ -692,9 +843,19 @@ export class TrampolineMode {
     const ph = this.athlete.physics;
     if (ev.type === 'touch') {
       this.sfx.boing(clamp(ev.v / 12, 0.1, 1));
-      if (this.phase === 'air') this.land(ev);
+      if (this.phase === 'air' || this.phase === 'return') this.land(ev);
     } else if (ev.type === 'bottom') {
-      if (this.stompArmed) this.fireStomp();
+      if (this.phase === 'super') {
+        // 超反発: 着くたびに高くなる
+        this.superStage = Math.min(SUPER.length - 1, this.superStage + 1);
+        ph.launchV = Math.sqrt(2 * PHYS.g * SUPER[this.superStage]);
+        this.time.hit(0.1);
+        this.cam.shake(0.6 + this.superStage * 0.2);
+        this.sfx.stomp(1);
+        this.bed.flash(2 + this.superStage);
+        this.arena.bump(0.3 + this.superStage * 0.25, 0.3 + this.superStage * 0.2);
+        this.director.moment('super');
+      } else if (this.stompArmed) this.fireStomp();
       else if (this.phase === 'bounce' || this.phase === 'ready' || this.phase === 'intro') {
         // ウォームアップ: 少しずつ高く
         this.warm = Math.min((this.warm ?? 0) + 1, WARMUP.length - 1);
@@ -705,7 +866,16 @@ export class TrampolineMode {
     } else if (ev.type === 'takeoff') {
       if (this.stompFired && this.phase === 'bounce') {
         this.stompFired = false;
-        this.beginAir(ev);
+        if (this.skyReady) {
+          this.setPhase('super');
+          this.superStage = 0;
+        } else this.beginAir(ev);
+      }
+      if (this.phase === 'super') {
+        const call = SUPER_CALL[this.superStage];
+        if (call) this.hud.comment(call, 2.2);
+        this.cam.set(['WIDE', 'HIGH', 'ROOF', 'TELE'][this.superStage], { dur: 0.5 });
+        this.sfx.whoosh(1 + this.superStage);
       }
     }
   }
@@ -731,6 +901,9 @@ export class TrampolineMode {
       level: this.level,
       rot: +this.athlete.rotSpeed.toFixed(1),
       events: this.director.active.map((a) => a.ev.id),
+      alt: Math.round(this.skyJump.alt),
+      zone: this.skyJump.active ? this.skyJump.zone : null,
+      drift: +this.skyJump.drift.x.toFixed(2),
       seen: [...this.director.seen],
     };
   }

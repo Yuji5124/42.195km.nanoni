@@ -245,6 +245,54 @@ body {
   font-size: 28px;
 }
 
+/* ===== 空から帰る時のレーダー ===== */
+.radar {
+  position: absolute;
+  right: var(--safe-r);
+  top: 44%;
+  text-align: center;
+  font-weight: 700;
+}
+.rd-label {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--cyan);
+}
+.rd-field {
+  position: relative;
+  width: 240px;
+  height: 26px;
+  margin: 4px auto;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.rd-target {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  bottom: 2px;
+  width: 26px;
+  margin-left: -13px;
+  border: 2px solid var(--cyan);
+  border-radius: 50%;
+}
+.rd-field b {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 10px var(--yellow);
+}
+.rd-hint {
+  font-family: var(--font-jp);
+  font-size: 13px;
+  text-shadow: 0 2px 0 #000;
+}
+
 /* ===== 踏み込みのタイミング ===== */
 .meter {
   position: absolute;
@@ -425,10 +473,9 @@ body {
 .result {
   position: absolute;
   right: var(--safe-r);
-  top: 50%;
-  transform: translateY(-50%);
+  top: calc(var(--safe-t) + 104px);
   width: min(380px, 92vw);
-  max-height: 76vh;
+  max-height: calc(100vh - 170px);
   overflow: hidden;
   background: rgba(6, 9, 28, 0.9);
   border-top: 4px solid var(--yellow);
@@ -530,8 +577,12 @@ body {
   background: radial-gradient(ellipse at 50% 60%, rgba(8, 10, 40, 0.35), rgba(4, 5, 18, 0.82));
 }
 .intro-wrap {
-  max-width: min(720px, 92vw);
+  max-width: min(960px, 94vw);
   text-align: center;
+}
+.intro h1 span {
+  display: inline-block;
+  white-space: nowrap;
 }
 .i-live {
   display: inline-block;
@@ -741,8 +792,8 @@ body[data-phase='final'] .mute-btn {
   100% { opacity: 0; transform: translate(-50%, -54%) scale(1.03); }
 }
 @keyframes resultIn {
-  from { opacity: 0; transform: translate(30px, -50%); }
-  to { opacity: 1; transform: translate(0, -50%); }
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes rowIn {
   from { opacity: 0; transform: translateX(14px); }

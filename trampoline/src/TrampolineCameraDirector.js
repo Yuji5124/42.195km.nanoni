@@ -14,6 +14,7 @@ import { clamp, damp, lerp, easeInOut } from '../../src/core/math.js';
 //   ROOF     … 床から天井を見上げる（天井 OPEN）
 //   LOOK     … 任意の点を映す（カメラが選手を見失った時）
 //   TELE     … 超望遠で追う（空へ飛んだ時・帰ってくる時）
+//   SKY / DOWN … 空の上（横から / 真上から帰る場所を見下ろす）
 //   RESULT   … 着地後の審判と得点
 //   INTRO    … タイトルの時、会場の上を回る
 //   SYNC     … 背景と偶然一致した瞬間（選手と花火・飛行機が重なって見える位置）
@@ -138,20 +139,28 @@ export class TrampolineCameraDirector {
         o.fov = 38;
         break;
       case 'TELE': {
-        // 超望遠: 遠くの地上から、上空の選手を追う
-        o.pos.set(60, 6, 110);
+        // 超望遠: 競技場の床（世界が縮んでいれば、はるか下）から、上空の選手を追う
+        o.pos.set(12, 2.5, 22); // 屋根の開口部ごしに見上げられる位置
+        if (ctx.world) ctx.world.localToWorld(o.pos);
         o.look.copy(c);
         const dist = o.pos.distanceTo(c);
-        o.fov = clamp(2 * Math.atan(5.5 / dist) * (180 / Math.PI), 1.2, 40);
+        o.fov = clamp(2 * Math.atan(4.5 / dist) * (180 / Math.PI), 0.6, 40);
         break;
       }
       case 'SKY': {
-        // 空の上: 選手の横・少し下から（足もとに世界が見える）
-        o.pos.set(c.x + 7, c.y - 2.5, c.z + 9);
-        o.look.set(c.x, c.y - 1.5, c.z);
-        o.fov = 55;
+        // 空の上: 選手の横・少し上から（足もとに街・雲・地球が見える）
+        const a = this.time * 0.12;
+        o.pos.set(c.x + Math.cos(a) * 8, c.y + 3.2, c.z + Math.sin(a) * 8);
+        o.look.set(c.x, c.y - 2.2, c.z);
+        o.fov = 52;
         break;
       }
+      case 'DOWN':
+        // 真上から: 足もとの会場（帰る場所）と選手が一緒に見える
+        o.pos.set(c.x + 0.3, c.y + 5, c.z + 5);
+        o.look.set(c.x, c.y - 6, c.z - 1.2);
+        o.fov = 58;
+        break;
       case 'RESULT': {
         // 審判席の正面（選手の側）から、札を上げる審判を映す
         const j = this.judgePoint;
