@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#05060f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>サッカー、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body data-phase="boot">
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <!-- 双眼鏡の視界（円 2 つ + 周辺暗転） -->
+      <div id="scope" class="scope hidden"><div id="scopeZoom" class="scope-zoom">6.0×</div></div>
+      <div id="blinds" class="blinds"></div>
+
+      <!-- ===== 中継 + ゲームの HUD（出しすぎない） ===== -->
+      <div id="hud" class="hud hidden">
+        <div class="bug">
+          <span class="live">● LIVE</span>
+          <span class="teams"><b class="jpn">JPN</b><span id="score">0 - 0</span><b class="bra">BRA</b></span>
+          <span id="clock" class="clock">00:00</span>
+        </div>
+        <div id="toast" class="toast"></div>
+        <div class="compass"><div id="compassStrip" class="strip"></div><i class="needle"></i></div>
+        <button id="ticketBtn" class="seats" type="button">
+          <span class="k">SEATS</span><b id="seatsLeft">100,000</b><small>TICKET ▸</small>
+        </button>
+        <div id="pins" class="pins"></div>
+        <div class="tools">
+          <div id="zoomBar" class="zoombar hidden"><i id="zoomFill"></i><span>8×</span><span>4×</span></div>
+          <button id="toolBtn" class="tool locked" type="button" aria-label="tool">
+            <svg class="ico eye" viewBox="0 0 24 24"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z" fill="none" stroke="currentColor" stroke-width="2" /><circle cx="12" cy="12" r="3.4" fill="currentColor" /></svg>
+            <svg class="ico bino" viewBox="0 0 24 24"><circle cx="6.5" cy="15" r="4.5" fill="none" stroke="currentColor" stroke-width="2.2" /><circle cx="17.5" cy="15" r="4.5" fill="none" stroke="currentColor" stroke-width="2.2" /><path d="M4 11 6 4h3l1 6M20 11l-2-7h-3l-1 6M10 13h4" fill="none" stroke="currentColor" stroke-width="2" /></svg>
+            <small id="toolName">肉眼</small>
+          </button>
+        </div>
+      </div>
+
+      <div id="markers" class="markers"></div>
+      <div id="card" class="card hidden"></div>
+      <div id="talk" class="talk"></div>
+      <div id="big" class="big"></div>
+      <button id="watchBtn" class="watch hidden" type="button">▶ WATCH MATCH<small>SPACE</small></button>
+
+      <!-- チケット -->
+      <div id="ticket" class="ticket-wrap hidden">
+        <div class="ticket">
+          <div class="t-head"><span>MEN'S FOOTBALL · FINAL</span><b>JPN vs BRA</b></div>
+          <div class="t-sub">19:00 KICK OFF · NANONI STADIUM</div>
+          <div class="t-grid">
+            <div><span>LEVEL</span><b id="tLevel">?????</b></div>
+            <div><span>SIDE</span><b id="tSide">?????</b></div>
+            <div><span>BLOCK</span><b id="tBlock">??</b></div>
+            <div><span>ROW</span><b id="tRow">??</b></div>
+            <div><span>SEAT</span><b id="tSeat">?</b></div>
+          </div>
+          <div class="t-smudge">にじんで読めない</div>
+          <div class="t-left"><span id="tLeft">100,000</span> 席のどれか</div>
+          <div class="t-close">タップで閉じる</div>
+        </div>
+      </div>
+
+      <!-- タイトル -->
+      <div id="intro" class="screen intro">
+        <div class="intro-wrap">
+          <div class="i-live">● LIVE · MEN'S FOOTBALL FINAL · JPN vs BRA</div>
+          <h1><span>サッカー、</span><span class="b">なのに。</span></h1>
+          <p class="i-lead">10 万人の中から、自分の席を探していたら、<br />試合が終わった。</p>
+          <ol class="i-how">
+            <li><b>ドラッグ</b>で見回す（← → ↑ ↓ / WASD）</li>
+            <li><b>タップ</b>で調べる・<b>長押し</b>で候補（右クリック）</li>
+            <li><b>ダブルタップ</b>で双眼鏡・<b>ピンチ</b>で倍率（B / ホイール）</li>
+          </ol>
+          <div class="i-note">VERTICAL SLICE · 前半 45 分（約 4 分）</div>
+          <div class="i-start blink">TAP / SPACE でスタート</div>
+        </div>
+        <button id="back" class="back-btn hidden" type="button">← タイトルへ</button>
+      </div>
+
+      <div id="opening" class="opening hidden"></div>
+      <div id="travel" class="travel hidden"></div>
+      <div id="result" class="screen result hidden"></div>
+
+      <div id="pause" class="screen pause hidden">
+        <div>PAUSE<small>ESC / タップで再開</small></div>
+        <button type="button" class="back-btn p-back hidden" data-action="back">← タイトルへ</button>
+      </div>
+      <button id="skipBtn" class="skip-btn hidden" type="button">SKIP ▸▸</button>
+      <button id="muteBtn" class="mute-btn" type="button" aria-label="mute">♪</button>
+      <div id="dev" class="dev hidden"></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1088 @@
+/* サッカー、なのに。 ─ スポーツ中継 + ゲームの UI。シリーズ（1500m / 800m / トランポリン）と同じ色・フォント。
+   通常は MATCH CLOCK / SCORE / SEARCH TOOL / CANDIDATES 程度。巨大な文字は GOAL / HALF TIME / YOUR SEAT FOUND だけ。 */
+:root {
+  --cyan: #39e6ff;
+  --pink: #ff3d7f;
+  --yellow: #ffd23f;
+  --seat: #2b8e9a;
+  --ink: #05060f;
+  --panel: rgba(6, 9, 28, 0.8);
+  --font-num: 'Chakra Petch', 'Arial Narrow', system-ui, sans-serif;
+  --font-jp: 'Dela Gothic One', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', 'Noto Sans JP', sans-serif;
+  --safe-t: max(10px, env(safe-area-inset-top));
+  --safe-l: max(12px, env(safe-area-inset-left));
+  --safe-r: max(12px, env(safe-area-inset-right));
+  --safe-b: max(12px, env(safe-area-inset-bottom));
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-num);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: block;
+  touch-action: none;
+}
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#ui button {
+  pointer-events: auto;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ===== 双眼鏡（SVG のマスク: 円 2 つの外を暗く） ===== */
+.scope {
+  position: absolute;
+  inset: 0;
+}
+.scope svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.scope-zoom {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 6px);
+  transform: translateX(-50%);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.75);
+}
+.blinds {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.blinds.on {
+  opacity: 1;
+}
+.blinds.fast {
+  transition: opacity 0.12s;
+}
+
+/* ===== 中継の帯 ===== */
+.bug {
+  position: absolute;
+  top: var(--safe-t);
+  left: var(--safe-l);
+  display: flex;
+  align-items: stretch;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+}
+.bug > span {
+  display: flex;
+  align-items: center;
+  padding: 5px 9px;
+}
+.bug .live {
+  background: #e0142c;
+  font-size: 11px;
+  animation: blink 0.9s infinite alternate;
+}
+.bug .teams {
+  background: var(--panel);
+  gap: 7px;
+}
+.bug .jpn {
+  border-left: 4px solid #1d3fb5;
+  padding-left: 5px;
+}
+.bug .bra {
+  border-right: 4px solid #f2d02a;
+  padding-right: 5px;
+}
+.bug .clock {
+  background: rgba(255, 210, 63, 0.16);
+  color: var(--yellow);
+  min-width: 62px;
+  justify-content: center;
+}
+.toast {
+  position: absolute;
+  top: calc(var(--safe-t) + 36px);
+  left: var(--safe-l);
+  padding: 5px 10px;
+  background: var(--panel);
+  border-left: 4px solid var(--yellow);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  opacity: 0;
+  transform: translateX(-12px);
+  transition: all 0.25s;
+}
+.toast.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* コンパス */
+.compass {
+  position: absolute;
+  top: var(--safe-t);
+  left: 50%;
+  width: min(34vw, 260px);
+  height: 26px;
+  transform: translateX(-50%);
+  overflow: hidden;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 25%, #000 75%, transparent);
+}
+.compass .strip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 100%;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.compass .strip span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.55);
+}
+.compass .strip span.main {
+  color: #fff;
+  font-size: 14px;
+  top: 2px;
+}
+.compass .strip span.n {
+  color: var(--cyan);
+}
+.compass .needle {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 2px;
+  height: 6px;
+  background: var(--yellow);
+}
+
+/* 残り席数 + チケット */
+.seats {
+  position: absolute;
+  top: var(--safe-t);
+  right: var(--safe-r);
+  display: grid;
+  justify-items: end;
+  padding: 4px 10px 5px;
+  border: 0;
+  border-top: 3px solid var(--seat);
+  background: var(--panel);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.45);
+  text-align: right;
+}
+.seats .k {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.6);
+}
+.seats b {
+  font-size: 19px;
+  line-height: 1.05;
+  color: #fff;
+  transition: color 0.3s;
+}
+.seats b.drop {
+  color: var(--yellow);
+}
+.seats small {
+  font-size: 10px;
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+}
+
+/* 候補 A B C */
+.pins {
+  position: absolute;
+  left: var(--safe-l);
+  bottom: var(--safe-b);
+  display: flex;
+  gap: 8px;
+}
+.pins button {
+  min-width: 52px;
+  height: 52px;
+  border: 2px solid var(--yellow);
+  border-radius: 12px;
+  background: var(--panel);
+  font-size: 19px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+}
+.pins button small {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.pins .hint {
+  align-self: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 120px;
+  line-height: 1.3;
+}
+
+/* 道具（親指の届く右下） */
+.tools {
+  position: absolute;
+  right: var(--safe-r);
+  bottom: var(--safe-b);
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+.tool {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: var(--panel);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.tool .ico {
+  width: 30px;
+  height: 30px;
+}
+.tool .bino {
+  display: none;
+}
+.tool.on {
+  border-color: var(--cyan);
+  background: rgba(57, 230, 255, 0.18);
+}
+.tool.on .bino,
+.tool.has .bino {
+  display: block;
+}
+.tool.on .eye,
+.tool.has .eye {
+  display: none;
+}
+.tool.locked {
+  opacity: 0.55;
+}
+.tool small {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.tool.new {
+  animation: pop 0.9s ease-in-out infinite alternate;
+}
+.zoombar {
+  position: relative;
+  width: 10px;
+  height: 120px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.zoombar i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 6px;
+  background: var(--cyan);
+}
+.zoombar span {
+  position: absolute;
+  right: 16px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.zoombar span:first-of-type {
+  top: -4px;
+}
+.zoombar span:last-of-type {
+  bottom: -4px;
+}
+
+/* 画面上の印（候補・調べている円） */
+.markers {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.pin-mark {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  font-size: 13px;
+  font-weight: 700;
+  color: #05060f;
+  background: var(--yellow);
+  padding: 1px 6px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.pin-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--yellow);
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+.pin-mark.off {
+  opacity: 0.35;
+}
+.pin-edge {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--yellow);
+  transform: translate(-50%, -50%);
+}
+.reticle {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border: 2px solid var(--cyan);
+  border-radius: 50%;
+  animation: scanIn 0.36s ease-out forwards;
+}
+.reticle.ok {
+  border-color: var(--yellow);
+  animation: hit 0.9s ease-out forwards;
+}
+.reticle.no {
+  border-color: rgba(255, 255, 255, 0.6);
+  animation: miss 0.7s ease-out forwards;
+}
+
+/* 調べた結果 */
+.card {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 96px);
+  transform: translateX(-50%);
+  width: min(92vw, 420px);
+  padding: 9px 14px 10px;
+  background: var(--panel);
+  border-left: 5px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  animation: cardIn 0.2s ease-out;
+}
+.card .c-text {
+  font-family: var(--font-jp);
+  font-size: 16px;
+  line-height: 1.45;
+}
+.card .c-seat {
+  margin-top: 3px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.6);
+}
+.card.decoy {
+  border-left-color: var(--pink);
+}
+.card.person {
+  border-left-color: rgba(255, 255, 255, 0.4);
+}
+.card.far {
+  border-left-color: rgba(255, 255, 255, 0.25);
+}
+.card.target {
+  border-left-color: var(--yellow);
+}
+
+/* 会話（字幕） */
+.talk {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-b) + 170px);
+  transform: translateX(-50%);
+  width: min(92vw, 560px);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+.talk .line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 14px;
+  background: rgba(0, 0, 0, 0.62);
+  border-radius: 6px;
+  font-family: var(--font-jp);
+  font-size: 17px;
+  line-height: 1.45;
+  animation: cardIn 0.25s ease-out;
+  text-align: left;
+}
+.talk .line .who {
+  flex: none;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+.talk .line.me .who {
+  background: #a01818;
+}
+.talk .line.pa .who {
+  background: #1d3fb5;
+}
+.talk .line.staff .who {
+  background: #0c7a4a;
+}
+.talk .line.me {
+  color: #fff4d6;
+}
+.talk .line.out {
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+/* 巨大な文字（重要な所だけ） */
+.big {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+.big .b-main {
+  font-family: var(--font-num);
+  font-style: italic;
+  font-weight: 700;
+  font-size: clamp(44px, 11vw, 118px);
+  letter-spacing: 0.02em;
+  line-height: 0.95;
+  text-shadow: 0 6px 0 #0b1a4a, 0 0 30px rgba(0, 0, 0, 0.6);
+  animation: bigIn 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.big .b-sub {
+  margin-top: 10px;
+  font-size: clamp(14px, 3.4vw, 22px);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.big .b-seat {
+  margin-top: 12px;
+  display: inline-block;
+  padding: 8px 18px;
+  background: var(--yellow);
+  color: #05060f;
+  font-size: clamp(16px, 4vw, 26px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.big.found .b-main {
+  color: var(--yellow);
+}
+
+/* 試合を見る（誘惑） */
+.watch {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--safe-t) + 70px);
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  border: 2px solid var(--yellow);
+  border-radius: 30px;
+  background: rgba(224, 20, 44, 0.85);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  animation: pop 0.5s ease-in-out infinite alternate;
+  display: grid;
+  justify-items: center;
+}
+.watch small {
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* チケット */
+.ticket-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+.ticket {
+  width: min(88vw, 400px);
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #f4efe2, #e6dcc5);
+  color: #16182a;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  position: relative;
+  border-left: 14px solid #1d3fb5;
+  animation: cardIn 0.25s ease-out;
+}
+.t-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+.t-head b {
+  font-size: 18px;
+}
+.t-sub {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+  margin: 2px 0 12px;
+}
+.t-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  text-align: center;
+}
+.t-grid span {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+.t-grid b {
+  display: block;
+  font-size: 17px;
+  filter: blur(2.5px);
+  opacity: 0.7;
+}
+.t-grid b.known {
+  filter: none;
+  opacity: 1;
+  color: #0b1a4a;
+  animation: pop 0.4s 2 alternate;
+}
+.t-smudge {
+  position: absolute;
+  right: 20px;
+  bottom: 40px;
+  font-family: var(--font-jp);
+  font-size: 11px;
+  color: #8a4a2a;
+  transform: rotate(-8deg);
+  opacity: 0.8;
+}
+.t-left {
+  margin-top: 12px;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+.t-left span {
+  font-weight: 700;
+  font-size: 16px;
+}
+.t-close {
+  margin-top: 8px;
+  font-size: 10px;
+  opacity: 0.5;
+  text-align: right;
+}
+
+/* ===== タイトル・結果 ===== */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+}
+.intro {
+  background: radial-gradient(ellipse at 50% 30%, rgba(20, 30, 80, 0.55), rgba(3, 4, 12, 0.92));
+}
+.intro-wrap {
+  width: min(92vw, 640px);
+  text-align: center;
+}
+.i-live {
+  display: inline-block;
+  padding: 4px 10px;
+  background: #e0142c;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.intro h1 {
+  margin: 18px 0 8px;
+  font-family: var(--font-jp);
+  font-weight: 400;
+  font-size: clamp(30px, 9.4vw, 84px);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.intro h1 .b {
+  color: var(--yellow);
+}
+.i-lead {
+  font-family: var(--font-jp);
+  font-size: clamp(14px, 3.6vw, 18px);
+  line-height: 1.6;
+  opacity: 0.9;
+}
+.i-how {
+  list-style: none;
+  padding: 0;
+  margin: 18px auto;
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  opacity: 0.85;
+}
+.i-how b {
+  color: var(--cyan);
+}
+.i-note {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  opacity: 0.55;
+}
+.i-start {
+  margin-top: 22px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--yellow);
+}
+.back-btn {
+  position: absolute;
+  left: var(--safe-l);
+  top: var(--safe-t);
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 13px;
+}
+.result {
+  background: rgba(2, 3, 10, 0.9);
+  overflow-y: auto;
+}
+.result-wrap {
+  width: min(92vw, 520px);
+  padding: 30px 0;
+  text-align: center;
+}
+.r-head {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.6);
+}
+.r-score {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 4px 0 16px;
+}
+.r-score small {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--yellow);
+}
+.r-rows {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+.r-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  opacity: 0;
+  animation: rowIn 0.35s ease-out forwards;
+}
+.r-row b {
+  font-size: 17px;
+}
+.r-row.hot b {
+  color: var(--yellow);
+}
+.r-title {
+  margin-top: 26px;
+  font-family: var(--font-jp);
+  font-size: clamp(34px, 9vw, 60px);
+  opacity: 0;
+  animation: rowIn 0.6s ease-out forwards;
+}
+.r-title .b {
+  color: var(--yellow);
+}
+.r-actions {
+  margin-top: 20px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.r-actions button {
+  padding: 10px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 14px;
+}
+.r-note {
+  margin-top: 12px;
+  font-size: 11px;
+  opacity: 0.5;
+  letter-spacing: 0.08em;
+}
+.pause {
+  background: rgba(0, 0, 0, 0.6);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+.pause small {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+}
+.mute-btn {
+  position: absolute;
+  right: var(--safe-r);
+  top: calc(var(--safe-t) + 66px);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: var(--panel);
+  font-size: 15px;
+}
+.mute-btn.off {
+  opacity: 0.4;
+  text-decoration: line-through;
+}
+.skip-btn {
+  position: absolute;
+  right: var(--safe-r);
+  bottom: var(--safe-b);
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+}
+
+/* ===== オープニング（最大 45 秒・文字中心） ===== */
+.opening {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  pointer-events: none;
+}
+.opening .o-txt {
+  font-family: var(--font-jp);
+  font-size: clamp(18px, 4.5vw, 30px);
+  line-height: 1.6;
+  animation: cardIn 0.3s ease-out;
+}
+.opening .o-num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: clamp(34px, 9vw, 80px);
+  letter-spacing: 0.08em;
+}
+.opening .o-small {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  opacity: 0.7;
+}
+.opening .o-phone {
+  width: 190px;
+  padding: 14px;
+  border-radius: 22px;
+  background: #11131c;
+  border: 3px solid #2a2d3a;
+  font-family: var(--font-num);
+  text-align: left;
+  animation: cardIn 0.3s ease-out;
+}
+.opening .o-phone b {
+  display: block;
+  font-size: 12px;
+  color: var(--cyan);
+  letter-spacing: 0.1em;
+}
+.opening .o-phone span {
+  font-size: 18px;
+  font-weight: 700;
+}
+.opening .o-gate {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: clamp(28px, 7vw, 56px);
+  letter-spacing: 0.1em;
+  padding: 10px 26px;
+  border: 4px solid currentColor;
+}
+.opening .o-gate.err {
+  color: #ff3d4f;
+}
+.opening .o-gate.ok {
+  color: #3dff8b;
+}
+.opening .o-title {
+  font-family: var(--font-jp);
+  font-size: clamp(40px, 11vw, 96px);
+  line-height: 1.1;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.8);
+}
+.opening .o-title .b {
+  color: var(--yellow);
+}
+.opening .o-find {
+  margin-top: 8px;
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: clamp(14px, 3.5vw, 22px);
+  letter-spacing: 0.4em;
+}
+
+/* 移動（反対側の席へ） */
+.travel {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  background: rgba(3, 4, 10, 0.72);
+  pointer-events: auto;
+}
+.travel .tr-head {
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--yellow);
+}
+.travel .tr-main {
+  font-family: var(--font-jp);
+  font-size: clamp(24px, 6vw, 40px);
+  margin: 8px 0 18px;
+}
+.travel .tr-bar {
+  width: min(80vw, 420px);
+  height: 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.travel .tr-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--yellow));
+}
+.travel .tr-tap {
+  margin-top: 16px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.travel .tr-clock {
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.75;
+  letter-spacing: 0.1em;
+}
+.travel .tr-heard {
+  margin-top: 10px;
+  min-height: 24px;
+  font-family: var(--font-jp);
+  font-size: 15px;
+  color: var(--pink);
+}
+
+/* 開発用 */
+.dev {
+  position: absolute;
+  left: var(--safe-l);
+  top: calc(var(--safe-t) + 70px);
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.7);
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  white-space: pre;
+  color: #9fffc0;
+}
+
+/* ===== アニメーション ===== */
+@keyframes blink {
+  to {
+    opacity: 0.55;
+  }
+}
+.blink {
+  animation: blink 0.8s infinite alternate;
+}
+@keyframes pop {
+  to {
+    transform: translateX(var(--tx, 0)) scale(1.06);
+  }
+}
+.watch {
+  --tx: -50%;
+}
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translate(var(--tx, 0), 8px);
+  }
+}
+.card {
+  --tx: -50%;
+}
+.talk .line {
+  --tx: 0;
+}
+@keyframes bigIn {
+  from {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes scanIn {
+  from {
+    transform: scale(2);
+    opacity: 0;
+  }
+  to {
+    transform: scale(0.6);
+    opacity: 1;
+  }
+}
+@keyframes hit {
+  0% {
+    transform: scale(0.6);
+  }
+  30% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+@keyframes miss {
+  to {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* 横長のスマホ: 下の余白を詰める */
+@media (max-height: 460px) {
+  .card {
+    bottom: calc(var(--safe-b) + 8px);
+    width: min(56vw, 400px);
+  }
+  .talk {
+    bottom: calc(var(--safe-b) + 70px);
+  }
+  .tool {
+    width: 64px;
+    height: 64px;
+  }
+  .pins button {
+    min-width: 44px;
+    height: 44px;
+  }
+  .intro h1 {
+    margin: 8px 0 4px;
+  }
+  .i-how {
+    margin: 8px auto;
+  }
+}
+@media (max-width: 520px) {
+  .bug {
+    font-size: 12px;
+  }
+  .bug > span {
+    padding: 4px 6px;
+  }
+  .compass {
+    top: calc(var(--safe-t) + 30px);
+    left: var(--safe-l);
+    transform: none;
+    width: 150px;
+  }
+  .seats b {
+    font-size: 16px;
+  }
+  .talk .line {
+    font-size: 15px;
+  }
+  .toast {
+    top: calc(var(--safe-t) + 58px);
+    max-width: calc(100vw - 80px);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+}
