@@ -18,6 +18,11 @@ const EXTERNAL = {
     title: ['トランポリン、', 'なのに。'],
     note: '数秒しかない滞空時間に、ゲームを詰め込みすぎる。<br />踏み込んで跳び、空中で英単語をタイピング。SPACE / TAP でトランポリンのページへ移動します。',
   },
+  soccer: {
+    url: './soccer/index.html#from-main',
+    title: ['サッカー、', 'なのに。'],
+    note: '10 万人の中から自分の席を探していたら、試合が終わった。<br />双眼鏡で空席を探す。SPACE / TAP でサッカーのページへ移動します。',
+  },
 };
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';
