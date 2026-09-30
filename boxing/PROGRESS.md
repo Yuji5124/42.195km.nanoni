@@ -20,8 +20,10 @@
 - [x] 入場・インターバル・FINAL・KO / 判定・結果
 - [x] 音（ゴング・パンチ・群衆・リズム・8bit）
 - [x] スモークテスト（`node boxing/tools/smoke.mjs`）・システム一覧の撮影（`node boxing/tools/systems.mjs`）
-- [ ] README / ARCHITECTURE・package.json のスクリプト
-- [ ] 仕上げ（見た目・バランス・スマホ）
+- [x] README / ARCHITECTURE・package.json のスクリプト（boxing:smoke / boxing:systems / boxing:shot）
+- [x] 仕上げ 1 回目（白飛び・各システムのカメラ・永久コンボ・難易度・入場の照明・インターバルの椅子・ポーズ解除・スマホの配置）
+- [x] タイトル画面の 6 枚を PC 3 + 3 / スマホ縦 1 列 / スマホ横 3 + 3 に
 
 ## 次にやること
-README と boxing/ARCHITECTURE.md を書く → package.json に boxing:smoke / boxing:shot → 仕上げ（各システムの見た目の確認）→ コミット・push。
+遊んだ人の感想を待つ。候補: 観客のボード（応援パネル）・入場曲・リプレイ中の実況・FINAL の ??? の演出を増やす・実機 GPU での FPS 計測。
+GitHub Pages に出すには main へのマージが必要（PR はまだ作っていない）。
