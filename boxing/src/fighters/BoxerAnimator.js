@@ -24,8 +24,8 @@ const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, 
 const STANCE = {
   footL: [0.12, 0, 0.19],
   footR: [-0.14, 0, -0.19],
-  gloveL: [0.08, 1.46, 0.3],
-  gloveR: [-0.07, 1.42, 0.16],
+  gloveL: [0.12, 1.47, 0.32],
+  gloveR: [-0.11, 1.43, 0.18],
   elbowL: [0.27, 1.02, -0.04],
   elbowR: [-0.27, 1.0, -0.08],
 };
@@ -126,24 +126,19 @@ export class BoxerAnimator {
     let gloveR = [...STANCE.gloveR];
     let elbowL = [...STANCE.elbowL];
     let elbowR = [...STANCE.elbowR];
-    // 足さばき（小さく交互に）
-    const shuffle = Math.sin(t * 2 * Math.PI * 0.95) * 0.03;
-    footL[2] += shuffle;
-    footR[2] -= shuffle * 0.6;
-    if (f.walk > 0.1) {
-      const w = this.walkPhase;
-      footL[2] += Math.sin(w) * 0.12;
-      footR[2] += Math.sin(w + Math.PI) * 0.12;
-      footL[1] = Math.max(0, Math.cos(w)) * 0.05;
-      footR[1] = Math.max(0, -Math.cos(w)) * 0.05;
-    }
+    // 足さばき: 足は床に置いたまま（すべらない）。体が動いたら 1 歩ずつ踏みかえる（plantFeet）
+    // 体重移動: 腰がわずかに左右へ
+    hipX += Math.sin(t * 2 * Math.PI * 0.48) * 0.012;
+    // 呼吸: 胸が少しふくらむ
+    chest[0] += Math.sin(t * 2 * Math.PI * 0.35) * 0.015;
     // ガード
     if (this.guard > 0.01) {
       const g = this.guard;
-      gloveL = lerp3(gloveL, [0.075, 1.6, 0.21], g);
-      gloveR = lerp3(gloveR, [-0.075, 1.58, 0.2], g);
-      elbowL = lerp3(elbowL, [0.18, 1.1, 0.1], g);
-      elbowR = lerp3(elbowR, [-0.18, 1.1, 0.1], g);
+      // 大きな頭の前（あごと口）を両方のグローブで隠す
+      gloveL = lerp3(gloveL, [0.1, 1.6, 0.33], g);
+      gloveR = lerp3(gloveR, [-0.1, 1.58, 0.32], g);
+      elbowL = lerp3(elbowL, [0.2, 1.12, 0.12], g);
+      elbowR = lerp3(elbowR, [-0.2, 1.12, 0.12], g);
       head[0] += 0.2 * g;
       hipY -= 0.03 * g;
       spine[0] += 0.08 * g;
@@ -190,7 +185,7 @@ export class BoxerAnimator {
       else e = 1 - smooth(pu.t / def.recover);
       const n = def.hand;
       const home = n === 'L' ? gloveL : gloveR;
-      const tgt = [target[0] * 0.92, target[1] - 0.04, target[2] - 0.12];
+      const tgt = [target[0] * 0.92, target[1] - 0.06, target[2] - 0.24];
       let g;
       if (pu.type === 'upper') {
         const low = [n === 'L' ? 0.1 : -0.08, 1.05, 0.22];
@@ -315,6 +310,11 @@ export class BoxerAnimator {
       heelR = 0;
     }
 
+    // 足を床に置く（リングの上で立っている時だけ。入場・休憩・勝利などの特別なポーズとダウンでは使わない）
+    P.x = this.override?.x ?? f.x;
+    P.z = this.override?.z ?? f.z;
+    if (!o?.pose && this.down < 0.05 && act !== 'down') [footL, footR] = this.plantFeet(dt, P.x, P.z, P.yaw, footL, footR);
+    else this.plant = null;
     // つま先は腰の向きに少しそろえる（半身の構え）。膝はつま先の方向へ曲げる
     const blade = o?.pose ? 0 : 1 - this.down;
     const toeL = -0.28 * blade;
@@ -326,8 +326,64 @@ export class BoxerAnimator {
     // なめらかにしてから当てる（パンチの拳だけ速く）
     const punching = act === 'punch' && f.punch ? PUNCHES[f.punch.type].hand : null;
     const fast = punching ? { [`glove${punching}`]: 42, [`elbow${punching}`]: 30, hipRot: 20, chest: 20 } : act === 'hit' ? { head: 26, chest: 20 } : null;
-    this.model.apply(smoothPose(this, P, dt, { fast, snap: this.snapNext }));
+    const sm = smoothPose(this, P, dt, { fast, snap: this.snapNext });
+    // 置いた足はワールドで固定: なめらかにした後の体の位置・向きで足の位置を計算し直す（すべらない）
+    if (this.plant) {
+      const c = Math.cos(sm.yaw);
+      const sn = Math.sin(sm.yaw);
+      for (const n of ['L', 'R']) {
+        const st = this.plant[n];
+        const dx = st.w[0] - sm.x;
+        const dz = st.w[1] - sm.z;
+        const k = `foot${n}`;
+        sm[k][0] = dx * c - dz * sn;
+        sm[k][2] = dx * sn + dz * c;
+        sm[k][1] = st.lift ?? 0;
+      }
+    }
+    this.model.apply(sm);
+    this.model.updateBlink?.(dt);
     this.snapNext = false;
+  }
+
+  // 足の踏みかえ: 足の位置はワールドで固定し、体（root）が動いて目標から離れたら、弧を描いて 1 歩で置き直す。
+  // 片足ずつ（もう片方が着地している時だけ）。大きく離れたら（押し戻し・瞬間移動）すぐ置き直す。
+  plantFeet(dt, x, z, yaw, fl, fr) {
+    const c = Math.cos(yaw);
+    const s = Math.sin(yaw);
+    const toW = (f) => [x + f[0] * c + f[2] * s, z - f[0] * s + f[2] * c];
+    const toL = (w) => {
+      const dx = w[0] - x;
+      const dz = w[1] - z;
+      return [dx * c - dz * s, dx * s + dz * c];
+    };
+    if (!this.plant) this.plant = { L: { w: toW(fl), t: 1 }, R: { w: toW(fr), t: 1 } };
+    const out = [];
+    for (const n of ['L', 'R']) {
+      const ft = n === 'L' ? fl : fr;
+      const want = toW(ft);
+      const st = this.plant[n];
+      const other = this.plant[n === 'L' ? 'R' : 'L'];
+      const d = Math.hypot(want[0] - st.w[0], want[1] - st.w[1]);
+      if (d > 0.7) {
+        st.w = want;
+        st.t = 1;
+      } else if (st.t >= 1 && (d > 0.08 && other.t >= 1 || d > 0.22)) {
+        st.from = st.w;
+        st.t = 0;
+      }
+      let lift = 0;
+      if (st.t < 1) {
+        st.t = Math.min(1, st.t + dt / 0.17);
+        const e = st.t * st.t * (3 - 2 * st.t);
+        st.w = [st.from[0] + (want[0] - st.from[0]) * e, st.from[1] + (want[1] - st.from[1]) * e];
+        lift = Math.sin(Math.PI * st.t) * 0.055;
+      }
+      st.lift = ft[1] + lift;
+      const l = toL(st.w);
+      out.push([l[0], ft[1] + lift, l[1]]);
+    }
+    return out;
   }
 }
 
