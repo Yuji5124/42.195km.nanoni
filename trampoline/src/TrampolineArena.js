@@ -238,7 +238,7 @@ export class TrampolineArena {
     ring.position.y = ROOF.y;
     this.roof.add(ring);
     // 開口部のふちの光（下から見える）
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(ROOF.open - 0.8, 0.35, 6, 96).rotateX(Math.PI / 2), glow(0xfff2d0, 2.2));
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(ROOF.open - 0.8, 0.35, 6, 96).rotateX(Math.PI / 2), glow(0xfff2d0, 1.2));
     lip.position.y = ROOF.y - 0.4;
     this.roof.add(lip);
     // 2 枚のパネル（半円 + 梁）。x = 0 の線で左右に分かれる
@@ -366,7 +366,7 @@ export class TrampolineArena {
     const ring = new THREE.Group();
     for (let k = 0; k < 16; k++) {
       const a = (k / 16) * Math.PI * 2;
-      const bank = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.2), glow(0xfff6e0, 1.9));
+      const bank = new THREE.Mesh(new THREE.PlaneGeometry(6, 2.2), glow(0xfff6e0, 1.45));
       bank.position.set(Math.cos(a) * (ROOF.open + 3), ROOF.y - 1.2, Math.sin(a) * (ROOF.open + 3));
       bank.lookAt(0, 0, 0);
       ring.add(bank);
@@ -521,7 +521,7 @@ export class TrampolineArena {
       this.hemi.color.setHSL((k * 0.8) % 1, 0.6, 0.72);
       if (k >= 1.12) {
         this.show = null;
-        banks.forEach((b) => b.material.color.setHex(0xfff6e0).multiplyScalar(1.9));
+        banks.forEach((b) => b.material.color.setHex(0xfff6e0).multiplyScalar(1.45));
         this.hemi.color.setHex(0xb8c4ff);
       }
     }

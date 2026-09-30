@@ -134,6 +134,7 @@ export class TrampolineMode {
   bindUI() {
     const fromMain = location.hash === '#from-main';
     document.querySelectorAll('.back-btn, .f-back').forEach((b) => b.classList.toggle('hidden', !fromMain));
+    // ポーズ中も 42.195km のタイトルへ戻れる
     document.getElementById('back').addEventListener('pointerdown', (e) => {
       e.stopPropagation();
       this.backToMain();
@@ -149,7 +150,10 @@ export class TrampolineMode {
       const m = this.audio.toggleMute();
       e.currentTarget.classList.toggle('off', m);
     });
-    document.getElementById('pause').addEventListener('pointerdown', () => this.setPaused(false));
+    document.getElementById('pause').addEventListener('pointerdown', (e) => {
+      if (e.target.closest('[data-action="back"]')) return this.backToMain();
+      this.setPaused(false);
+    });
     const wake = () => this.audio.init();
     window.addEventListener('keydown', wake);
     window.addEventListener('pointerdown', wake);
@@ -674,7 +678,7 @@ export class TrampolineMode {
   }
 
   finishAttempt() {
-    const rec = this.scoring.finish(this.execution ?? 8, () => this.rng.next());
+    const rec = this.scoring.finish(this.execution ?? 8, () => this.rng.next(), this.attempt);
     this.setPhase('result');
     this.hud.clearFeed(); // 内訳は結果の表にまとめて出る
     this.hud.showResult(rec, this.attempt, ATTEMPTS, this.scoring.total);

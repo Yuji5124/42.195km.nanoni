@@ -230,10 +230,10 @@ export class TrampolineHUD {
     const cats = Object.entries(scoring.byCat)
       .map(([k, v]) => `<li><span>${k}</span><small>${CAT_JP[k]}</small><b>${fmt(v)}</b></li>`)
       .join('');
-    const best = scoring.history.reduce((a, r, i) => (r.sum > (a?.sum ?? -1) ? { sum: r.sum, i } : a), null);
+    const best = scoring.history.reduce((a, r) => (r.sum > (a?.sum ?? -1) ? r : a), null);
     el.querySelector('.f-total').textContent = fmt(scoring.total);
     el.querySelector('.f-cats').innerHTML = cats;
-    el.querySelector('.f-best').textContent = best ? `BEST ATTEMPT ${best.i + 1} · ${fmt(best.sum)}` : '';
+    el.querySelector('.f-best').textContent = best ? `BEST ATTEMPT ${best.attempt} · ${fmt(best.sum)}` : '';
     el.querySelector('.f-note').textContent = extra.note ?? '';
     el.classList.remove('hidden');
   }

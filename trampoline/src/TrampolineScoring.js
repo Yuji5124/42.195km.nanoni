@@ -50,7 +50,7 @@ export class TrampolineScoring {
   }
 
   // 試技の終わり: 審判の点（execution 0〜10）を足して確定
-  finish(execution, judgeRng) {
+  finish(execution, judgeRng, attempt = this.history.length + 1) {
     // 5 人の審判: 平均 execution のまわりに少しばらつく（最高と最低を除いた平均が公式）
     const cards = [];
     for (let i = 0; i < 5; i++) cards.push(Math.max(0, Math.min(10, Math.round((execution + (judgeRng() - 0.5) * 0.6) * 10) / 10)));
@@ -61,7 +61,7 @@ export class TrampolineScoring {
     const sum = this.attemptSum;
     for (const i of this.items) this.byCat[i.cat] += i.points;
     this.total += sum;
-    const rec = { items: [...this.items], sum, cards, official };
+    const rec = { items: [...this.items], sum, cards, official, attempt };
     this.history.push(rec);
     return rec;
   }
