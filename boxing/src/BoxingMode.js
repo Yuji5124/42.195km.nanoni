@@ -251,11 +251,7 @@ export class BoxingMode {
 
   // 半透明の自分（正面固定カウンター）
   setGhost(on) {
-    const m = this.P.mat;
-    m.transparent = on;
-    m.opacity = on ? 0.22 : 1;
-    m.depthWrite = !on;
-    m.needsUpdate = true;
+    this.P.setGhost(on);
   }
 
   // ------------------------------------------------------------------
