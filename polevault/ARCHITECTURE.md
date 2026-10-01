@@ -126,8 +126,10 @@ SHOT の点数 = sports + composition + timing + emotion + story + beauty + rari
 | 層 | 人数 | 描き方 |
 | --- | --- | --- |
 | 遠く・中くらい | 30,000（ビルボード）| soccer の `CrowdField`（1 draw call・画面の大きさで LOD）。姿勢は `CrowdDirector` の DataTexture（ブロック 44 個）|
-| 撮影台の後ろ | 〜800 | soccer の `NearCrowd`（ローポリの人形・1 draw call）|
-| 特殊 NPC | 約 70（物語 15〜25 + 審判・スタッフ 11 + ただの観客 40）| `Figure`（SkinnedMesh・1 人 1 draw call・表情・視線・小物）。その席のビルボードは空席にする |
+| 特殊 NPC | 約 85（物語 15〜25 + 審判・スタッフ 11 + ただの観客 55。撮影台の真後ろの 7 列に 30 人）| `Figure`（SkinnedMesh・1 人 1 draw call・表情・視線・小物）。その席のビルボードは空席にする |
+
+soccer の `NearCrowd`（箱の人形）は使わない: カメラの真後ろ 3〜8m の席は振り返るとすぐ目の前で、箱の人形は粗く見え、顔のある `Figure` とも合わない。
+そこはビルボード（スタジアムのほかの観客と同じ絵柄）+ 顔のある `Figure` を多めに混ぜた（`?near` で NearCrowd を有効にして比べられる）。
 
 観客の反応はブロック単位: 手拍子（儀式で求められると、助走に向けて速くなる）→ 前のめり → 半分立つ → 成功で歓声・拍手 / 失敗で頭を抱える → 座る。
 最後の試技の前は会場が静かになり、カーブとバックスタンドでスマホのライトが灯る。大会新記録で全員が跳ぶ。
@@ -152,12 +154,12 @@ SHOT の点数 = sports + composition + timing + emotion + story + beauty + rari
 
 | 項目 | 値 |
 | --- | --- |
-| 観客 | 30,000（ビルボード 1）+ 撮影台の後ろの 3D 800（1）+ 特殊 NPC 約 70（各 1、画面外は 8 フレームに 1 回だけ姿勢を更新） |
+| 観客 | 30,000（ビルボード 1）+ 特殊 NPC 約 85（各 1、画面外は 8 フレームに 1 回だけ姿勢を更新） |
 | draw call | 80〜150（スタンド・屋根は断面の押し出しで数個） |
 | JS | 毎フレーム 1ms 前後（被写体の分析 約 120 体・特殊 NPC の IK・ポール 4 本）|
 | ポストエフェクト | MSAA 4 の HDR → 1/4 解像度のブルーム（2 回ぼかし）→ 仕上げ 1 パス（被写界深度 20 点 + 流れ 6 点）|
 | AI の判定 | 毎フレームはしない。SHOT の時と、ロックし続けた 3 秒ごとだけ（画像の解析は 160×90）|
-| 自動調整 | `soccer/src/core/PerformanceGovernor.js`（pixelRatio・3D の観客・alpha-to-coverage・VERY LOW で影とブルームを切る）|
+| 自動調整 | `soccer/src/core/PerformanceGovernor.js`（pixelRatio・alpha-to-coverage・VERY LOW で影とブルームを切る）|
 
 ## 10. 調べた GitHub リポジトリとライセンス（2026-10）
 

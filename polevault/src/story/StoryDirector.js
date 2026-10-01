@@ -192,8 +192,8 @@ export class StoryDirector {
     // 物語のない「ただの観客」（細かい人形）: 撮影台のすぐ後ろ・正面のスタンド
     this.ambient = [];
     const amb = [
-      ['nearMain', 16, [0, 6], [-10, 12]],
-      ['nearMain', 6, [6, 14], [-14, 16]],
+      ['nearMain', 30, [0, 6], [-12, 14]],
+      ['nearMain', 8, [6, 14], [-16, 18]],
       ['back', 8, [0, 12]],
       ['curveE', 6, [0, 14]],
       ['curveW', 3, [0, 12]],

@@ -130,8 +130,10 @@ export class PoleVaultMode {
       const l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
       c.setRGB(c.r * 0.72 + l * 0.18, c.g * 0.72 + l * 0.18, c.b * 0.72 + l * 0.18);
     }
-    this.near = new NearCrowd(scene, this.layout, this.plan, this.crowd, this.field);
-    this.buildNear(q.near);
+    // 撮影台のすぐ後ろはビルボード（ほかの観客と同じ絵柄）+ 顔のある 3D の人（SpecialCrowd）。
+    // soccer の NearCrowd（箱の人形）は、カメラの真後ろ 3〜8m では粗く見えるので使わない（?near で有効）
+    this.near = this.params.has('near') ? new NearCrowd(scene, this.layout, this.plan, this.crowd, this.field) : null;
+    if (this.near) this.buildNear(q.near);
     this.specials = new SpecialCrowd(scene, this.layout, this.field);
     this.stories.spawn(scene, this.specials);
 
@@ -146,6 +148,7 @@ export class PoleVaultMode {
 
     // ---- カメラ・画面・入力
     this.camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 2200);
+    this.camera.layers.enable(1); // 撮影台の後ろの 3D の観客（NearCrowd は layer 1）
     this.cam = new BroadcastCamera(this.camera, CAM_POS);
     this.cam.aimAt(new THREE.Vector3(RUNWAY.start + 6, 1.6, RUNWAY.z), true);
     this.cam.pullFocus(this.cam.pos.distanceTo(new THREE.Vector3(RUNWAY.start + 6, 1.6, RUNWAY.z)));
@@ -194,7 +197,7 @@ export class PoleVaultMode {
     this.field.setA2C(q.a2c);
     this.post.bloomOn = q.name !== 'VERY LOW';
     this.keyLight.castShadow = q.name !== 'VERY LOW';
-    if (Math.abs(this.near.count - Math.min(q.near, 800)) > 150) this.buildNear(q.near);
+    if (this.near && Math.abs(this.near.count - Math.min(q.near, 800)) > 150) this.buildNear(q.near);
   }
 
   resize() {
@@ -1163,7 +1166,7 @@ export class PoleVaultMode {
     el.textContent = [
       `FPS ${this.gov.fps.toFixed(0)}  ${this.gov.q.name}  PR ${this.renderer.getPixelRatio().toFixed(2)}`,
       `draw ${r.render.calls}  tris ${(r.render.triangles / 1000).toFixed(0)}k  JS ${this.jsMs?.toFixed(2)}ms`,
-      `crowd ${this.layout.count.toLocaleString('en-US')}  near3D ${this.near.count}  special ${this.specials.list.length}`,
+      `crowd ${this.layout.count.toLocaleString('en-US')}  near3D ${this.near?.count ?? 0}  special ${this.specials.list.length}`,
       `t ${this.t.toFixed(1)}  zoom ${this.cam.zoom.toFixed(1)}  focus ${this.cam.focus.toFixed(1)}  q ${j.q.toFixed(2)}  v ${j.v.toFixed(1)}`,
       `main ${j.main?.s.id ?? '-'}  items ${this.items?.length ?? 0}`,
       `stories ${this.stories.active.map((s) => s.id).join(',')}`,
