@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>なのに。ジェネレーター</title>
+<style>
+:root{--bg:#0d0f14;--card:#171a22;--text:#f7f7f2;--muted:#a8afbd;--line:#2a3040;--accent:#ffd84d;--accent2:#85e7ff}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:radial-gradient(circle at top,#1a2030 0,#0d0f14 42%);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{max-width:1080px;margin:auto;padding:calc(24px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(72px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.hero{margin-bottom:24px}.kicker{color:var(--accent);font-weight:800;letter-spacing:.12em;font-size:12px}.hero h1{font-size:clamp(34px,7vw,72px);line-height:.95;margin:10px 0}.hero p{color:var(--muted);max-width:760px;line-height:1.8}
+.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.card{background:rgba(23,26,34,.92);border:1px solid var(--line);border-radius:20px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{margin:12px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:7px;font-weight:700;letter-spacing:.08em}
+select,input{width:100%;background:#0f1218;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:13px 14px;font-size:16px;min-height:48px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}button{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;padding:14px 18px;min-height:48px;font-size:15px;font-weight:800;cursor:pointer;touch-action:manipulation}.primary{background:var(--accent);color:#111}.ghost{background:#222838;color:var(--text);border:1px solid var(--line)}
+.resultTitle{font-size:32px;line-height:1.15;margin:0 0 10px}.tagline{font-size:18px;color:var(--accent2);margin-bottom:18px}.pillbox{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:#cbd2df;font-size:12px}
+.section{margin-top:20px}.section h3{font-size:13px;color:var(--muted);letter-spacing:.08em;margin:0 0 8px}.section p,.section li{line-height:1.75}.section ul{padding-left:20px;margin:8px 0}
+.score{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:18px}.score div{background:#10141c;border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}.score b{display:block;font-size:22px;color:var(--accent)}.score span{font-size:11px;color:var(--muted)}.tiny{font-size:12px;color:var(--muted)}
+@media(max-width:850px){.grid{grid-template-columns:1fr}.row{grid-template-columns:1fr}.score{grid-template-columns:repeat(2,1fr)}.hero h1{font-size:44px}.card{padding:16px;border-radius:16px}.controls{display:grid;grid-template-columns:1fr}.controls button{width:100%}.resultTitle{font-size:28px}.tagline{font-size:17px}}
+@media(max-width:420px){.wrap{padding-left:12px;padding-right:12px}.hero h1{font-size:40px}.hero p{font-size:14px}.score{grid-template-columns:1fr 1fr}.score b{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="kicker">42.195km、なのに。 発想装置</div>
+    <h1>なのに。<br>ジェネレーター</h1>
+    <p>競技そのものを面白くするのではなく、<b>本来ゲームにしないもの</b>を主役にして、別ジャンルのゲーム性と「邪魔」をぶつけます。</p>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="row"><div class="field"><label>① 競技</label><select id="sport"></select></div><div class="field"><label>② 本来主役じゃないもの</label><select id="subject"></select></div></div>
+      <div class="row"><div class="field"><label>③ 別ジャンルのゲーム性</label><select id="mechanic"></select></div><div class="field"><label>④ 関係ない邪魔</label><select id="chaos"></select></div></div>
+      <div class="row"><div class="field"><label>⑤ 技術・見せ方</label><select id="tech"></select></div><div class="field"><label>⑥ 笑いの方向</label><select id="tone"></select></div></div>
+      <div class="field"><label>追加したい言葉・縛り（任意）</label><input id="custom" placeholder="例：小学生向け / 10分 / 3万人の観客 / AI判定"></div>
+      <div class="controls"><button class="primary" id="generate">なのに。を生成</button><button class="ghost" id="random">全部ランダム</button><button class="ghost" id="mutate">今の案を1箇所だけ変える</button></div>
+      <p class="tiny">強い案ほど「競技名を消してもゲームとして遊べる」「でも競技が背景にあるから笑える」の両方を満たします。</p>
+    </div>
+    <div class="card" id="result">
+      <h2 class="resultTitle">サッカー、なのに。</h2><div class="tagline">90分あるのに、試合を全然見られない。</div>
+      <div class="pillbox"><span class="pill">観客</span><span class="pill">探し物ゲーム</span><span class="pill">周囲の騒ぎ</span><span class="pill">群衆シミュレーション</span></div>
+      <div class="section"><h3>核となる遊び</h3><p>巨大スタジアムの観客席を移動し、試合が見える場所を探す。望遠鏡、空席、モニターを使い分けるが、周囲の人間ドラマや応援で視界が奪われる。</p></div>
+      <div class="section"><h3>「なのに。」ポイント</h3><p>サッカーゲームなのに、ボール操作より「サッカーを見る努力」の方がゲームになっている。</p></div>
+      <div class="score"><div><b>9</b><span>タイトル矛盾</span></div><div><b>10</b><span>関係なさ</span></div><div><b>9</b><span>遊びの強さ</span></div><div><b>10</b><span>見た目の伝わり</span></div></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:18px"><div class="section"><h3>判断基準</h3><ul><li><b>タイトル矛盾：</b>「○○なのに、なぜそれをしている？」が1秒で伝わる。</li><li><b>関係なさ：</b>背景・係員・設備・観客・判定・カメラなどを主役にする。</li><li><b>ゲーム性：</b>探す、避ける、集める、タイミング、経営、推理など別の遊びが成立する。</li><li><b>競技への敬意：</b>競技そのものではなく、周辺が異常に忙しいことで笑わせる。</li></ul></div></div>
+</div>
+<script>
+const data={
+sport:['100m','800m','1500m','マラソン','サッカー','バスケットボール','バレーボール','卓球','テニス','バドミントン','フェンシング','柔道','レスリング','ボクシング','アーチェリー','射撃','トランポリン','体操','棒高跳','走高跳','走幅跳','競泳','飛込','水球','自転車','スケートボード','スポーツクライミング'],
+subject:['観客','カメラマン','実況者','審判','ボールボーイ','係員','警備員','清掃員','売店スタッフ','電光掲示板','スタートピストル','ゴールテープ','風速計','タイマー','望遠鏡','客席の空席','テレビ中継モニター','選手の靴','ユニフォーム','マイク','ドローンカメラ','得点表示','入場ゲート','迷子センター','スポンサー看板','表彰台','観客のスマホ'],
+mechanic:['探し物ゲーム','群衆の中を移動するゲーム','タイピング','リズムゲーム','ステルス','経営シミュレーション','写真撮影スコアアタック','推理ゲーム','パズル','タワーディフェンス','レース','ローグライク','クレーンゲーム','音ゲー','監視カメラゲーム','配線・設備修理','料理ゲーム','交通整理','カードゲーム','物理演算','間違い探し','タイムループ','オークション','実況編集ゲーム'],
+chaos:['周囲の観客が立ち上がる','知らない人の人間ドラマが始まる','巨大な旗で視界が消える','ウェーブが来る','子どもが前を横切る','売り子が通路を塞ぐ','突然プロポーズが始まる','別の客同士が喧嘩する','迷子が泣き出す','スマホ撮影で画面が埋まる','実況が全然違う話をする','鳥が入り込む','停電する','座席番号が入れ替わる','会場BGMが強すぎる','応援の振動で画面が揺れる','天井が開く','選手より観客が盛り上がる','スポンサー演出が長すぎる','隣の人がずっと話しかけてくる'],
+tech:['3万人級の群衆表現','WebGL/Three.js 3D','疑似PS1表現','監視カメラ切替','魚眼カメラ','WebAudioによる方向音','物理演算','簡易AI群衆','顔向き・視線演出','ミニマップ無し','テレビ中継UI','分割画面','ドローン視点','時間スロー','画面グリッチ','リプレイ機能','ランダムイベント生成','観客密度ヒートマップ'],
+tone:['くだらなさ優先','小学生でも笑える','真面目な見た目で内容だけ変','競技は格好良く、周囲だけバカ','だんだん狂っていく','静かにおかしい','大げさな実況で笑わせる','発見した瞬間に笑える']};
+for(const k of Object.keys(data)){const s=document.getElementById(k);for(const v of data[k]){const o=document.createElement('option');o.textContent=v;o.value=v;s.appendChild(o)}}
+const rand=a=>a[Math.floor(Math.random()*a.length)];
+function randomAll(){Object.keys(data).forEach(k=>document.getElementById(k).value=rand(data[k]));generate()}
+function mutate(){const k=rand(Object.keys(data));document.getElementById(k).value=rand(data[k]);generate()}
+function hashScore(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))>>>0;return h}
+function score(sport,subject,mechanic,chaos,tech){const us=['電光掲示板','風速計','タイマー','ゴールテープ','客席の空席','スポンサー看板','観客のスマホ','スタートピストル'];const sm=['探し物ゲーム','推理ゲーム','監視カメラゲーム','経営シミュレーション','写真撮影スコアアタック','タイムループ','交通整理'];let a=7,b=7,c=7,d=7;if(us.includes(subject)){a++;b+=2}if(sm.includes(mechanic))c+=2;if(/視界|入れ替わる|停電|横切る|話しかけ/.test(chaos)){a++;c++}if(/群衆|魚眼|監視|分割|ドローン|方向音|ヒートマップ/.test(tech))d+=2;const h=hashScore(sport+subject+mechanic+chaos+tech);a+=h%2;b+=(h>>2)%2;c+=(h>>4)%2;d+=(h>>6)%2;return[a,b,c,d].map(x=>Math.max(5,Math.min(10,x)))}
+function generate(){const v={};Object.keys(data).forEach(k=>v[k]=document.getElementById(k).value);v.custom=document.getElementById('custom').value.trim();const taglines=[v.sport+'なのに、'+v.subject+'の仕事が忙しすぎる。',v.sport+'なのに、いちばん大事なのは'+v.mechanic+'。',v.sport+'なのに、競技を見る暇がない。',v.sport+'なのに、'+v.chaos+'せいで本番どころじゃない。',v.sport+'なのに、主役は'+v.subject+'。'];const loops=[v.subject+'を操作し、'+v.mechanic+'として会場内を攻略する。競技は常に背景で進んでいるが、'+v.chaos+'。プレイヤーは状況を読み、より良い位置・タイミング・対象を選んでスコアを伸ばす。','競技そのものは自動進行。プレイヤーの仕事は'+v.subject+'として'+v.mechanic+'を成立させること。成功すると競技が少し見えるが、すぐに'+v.chaos+'。その繰り返しで10分前後の濃いゲームにする。',v.subject+'視点で会場を動き回る。操作の中心は'+v.mechanic+'。'+v.tech+'を使い、競技そのものより周辺の異常な状況を見つけるほど得点が上がる。'];const why=v.sport+'を遊ぶゲームなのに、選手やボールではなく「'+v.subject+'」を操作し、しかも中心の遊びが「'+v.mechanic+'」になっている。競技を壊さず、周辺の出来事だけを異常に重要にするのが笑いの核。';const s=score(v.sport,v.subject,v.mechanic,v.chaos,v.tech);document.getElementById('result').innerHTML='<h2 class="resultTitle">'+v.sport+'、なのに。</h2><div class="tagline">'+rand(taglines)+'</div><div class="pillbox"><span class="pill">'+v.subject+'</span><span class="pill">'+v.mechanic+'</span><span class="pill">'+v.chaos+'</span><span class="pill">'+v.tech+'</span></div><div class="section"><h3>核となる遊び</h3><p>'+rand(loops)+'</p></div><div class="section"><h3>「なのに。」ポイント</h3><p>'+why+'</p></div><div class="section"><h3>演出方針</h3><p>'+v.tech+'。笑いは「'+v.tone+'」で統一する。'+(v.custom?'追加条件：'+v.custom+'。':'')+'</p></div><div class="section"><h3>30秒で伝わるゲーム紹介</h3><p>「'+v.sport+'のゲームです。でもあなたがやるのは'+v.subject+'。'+v.mechanic+'をしながら、'+v.chaos+'。競技をちゃんと楽しみたいのに、全然それどころじゃない。」</p></div><div class="score"><div><b>'+s[0]+'</b><span>タイトル矛盾</span></div><div><b>'+s[1]+'</b><span>関係なさ</span></div><div><b>'+s[2]+'</b><span>遊びの強さ</span></div><div><b>'+s[3]+'</b><span>見た目の伝わり</span></div></div>'}
+document.getElementById('generate').onclick=generate;document.getElementById('random').onclick=randomAll;document.getElementById('mutate').onclick=mutate;
+document.getElementById('sport').value='サッカー';document.getElementById('subject').value='観客';document.getElementById('mechanic').value='探し物ゲーム';document.getElementById('chaos').value='周囲の観客が立ち上がる';document.getElementById('tech').value='3万人級の群衆表現';document.getElementById('tone').value='競技は格好良く、周囲だけバカ';
+</script>
+</body>
+</html>
