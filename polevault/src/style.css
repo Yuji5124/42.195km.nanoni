@@ -583,6 +583,19 @@ body.locked #game {
   letter-spacing: 0.3em;
   opacity: 0.85;
 }
+.cue div.tip {
+  margin-top: 40vh;
+  animation: subin 0.5s ease-out both;
+}
+.cue div.tip small {
+  display: inline-block;
+  padding: 5px 12px;
+  background: rgba(0, 0, 0, 0.55);
+  font-family: var(--font-text);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  opacity: 0.95;
+}
 .cue div.y { color: var(--yellow); }
 .cue div.r { color: var(--red); }
 .cue div.c { color: var(--cyan); }

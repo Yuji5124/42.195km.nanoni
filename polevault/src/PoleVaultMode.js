@@ -813,6 +813,7 @@ export class PoleVaultMode {
     }
     this.afFlash = Math.max(0, (this.afFlash ?? 0) - dt);
     this.mutterCool -= dt;
+    this.monologue(t);
     this.audioTick(dt);
     // ---- 終わり
     if (t >= END_T) this.offAir();
@@ -828,12 +829,28 @@ export class PoleVaultMode {
       }
     };
     at('m1', 0.6, () => this.hud.say('今月ちょっと厳しいんだよな。', 3.4));
-    at('tip', 1.2, () => this.hud.cue('', { small: this.touch ? 'ドラッグ: カメラ ・ ピンチ: ズーム ・ SHOT で撮影' : 'マウス: カメラ ・ ホイール: ズーム ・ SPACE: SHOT ・ 左クリック: ロック', dur: 7 }));
+    at('tip', 1.2, () => this.hud.cue('', { cls: 'tip', small: this.touch ? 'ドラッグ: カメラ ・ ピンチ: ズーム ・ SHOT で撮影' : 'マウス: カメラ ・ ホイール: ズーム ・ SPACE: SHOT ・ 左クリック: ロック', dur: 7 }));
     at('m2', 4.2, () => this.hud.say('今日、数字取れないとまずい。', 3.4));
     at('m3', 7.8, () => this.hud.say('頼むから何か起きてくれ。', 3.2));
     at('d1', 9.4, () => this.commentary.line('本番 5 秒前。', 'D', { pri: 4, dur: 1.4 }, t));
     at('d2', 10.6, () => this.commentary.line('4、3……', 'D', { pri: 4, dur: 1.6 }, t));
     at('onair', ON_AIR, () => this.goOnAir(silent));
+  }
+
+  // 主人公の独り言（状況に合わせて 1 回ずつ。重くしすぎない）
+  monologue(t) {
+    const said = (this.monoSaid ??= new Set());
+    const say = (k, text, dur = 2.8) => {
+      if (said.has(k)) return;
+      said.add(k);
+      this.hud.say(text, dur);
+    };
+    const j = this.judge;
+    if (t > 54 && t < 70 && this.sky.moonVisible && Math.abs(this.cam.offsetTo(this.sky.moon.position).dyaw) < 0.6) say('moon', '……月、出てきたな。');
+    if (j.spike > 0 && t > ON_AIR + 5) say('spike', 'お、数字動いた。');
+    if (t > 42 && j.shots.length === 0) say('noshot', '何か撮らないと……。');
+    if (t > 70 && j.v < 13.5) say('low', 'やばい、下がってる。');
+    if (t > 163) say('final', 'ここだ。どこを撮る……？', 3.2);
   }
 
   // 撮っている人の声（指向性マイク）: 物語の say を、十分に寄っている時だけ
@@ -996,11 +1013,11 @@ export class PoleVaultMode {
   // 物語を撮った（エピローグの材料）
   captureStories(shot, items) {
     let cap = null;
-    if (shot.story?.npc) cap = this.stories.capture(shot.story.npc, shot);
+    if (shot.story?.npc) cap = this.stories.capture(shot.story.npc, shot, shot.story.story ?? null);
     else if (shot.story?.story) cap = this.stories.capture(shot.story.story, shot);
     for (const it of items) {
       const n = it.s.npc;
-      if (n?.story && n.beat && it.frac > 0.05 && n !== shot.story?.npc) this.stories.capture(n, { ...shot, points: shot.points * 0.3 });
+      if (n?.beat?.story && it.frac > 0.05 && n !== shot.story?.npc) this.stories.capture(n, { ...shot, points: shot.points * 0.3 });
     }
     if (items.some((it) => it.s.kind === 'birds' && it.frac > 0.004)) this.stories.capture('birds', shot);
     if (shot.lines.includes('MOON DETECTED') && shot.V.beauty >= 300) this.stories.capture('sky', shot);

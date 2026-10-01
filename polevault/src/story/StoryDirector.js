@@ -450,8 +450,9 @@ export class StoryDirector {
   }
 
   // ---- 撮影: 物語のどの拍を撮ったか
-  capture(npcOrStory, shot) {
-    const sid = typeof npcOrStory === 'string' ? npcOrStory : npcOrStory.story ?? npcOrStory.storyObj?.id;
+  capture(npcOrStory, shot, storyId = null) {
+    // 拍の物語を優先（審判長のように物語を持たないフィールドの人が演じる拍もある）
+    const sid = storyId ?? (typeof npcOrStory === 'string' ? npcOrStory : npcOrStory.beat?.story?.id ?? npcOrStory.story ?? npcOrStory.storyObj?.id);
     if (!sid) return null;
     let c = this.captured.get(sid);
     if (!c) {
