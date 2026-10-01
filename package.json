@@ -2,7 +2,7 @@
   "name": "42195km-nanoni",
   "private": true,
   "version": "0.1.0",
-  "description": "42.195km、なのに。/ 1500m、なのに。/ 800m、なのに。/ トランポリン、なのに。/ サッカー、なのに。/ ボクシング、なのに。 — 東京 × 陸上 × デジタル × バカゲー (Three.js)",
+  "description": "42.195km、なのに。/ 1500m、なのに。/ 800m、なのに。/ トランポリン、なのに。/ サッカー、なのに。/ ボクシング、なのに。/ 棒高跳び、なのに。 — 東京 × 陸上 × デジタル × バカゲー (Three.js)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,7 +20,9 @@
     "soccer:shot": "vite build && node soccer/tools/shot.mjs",
     "boxing:smoke": "vite build && node boxing/tools/smoke.mjs",
     "boxing:systems": "vite build && node boxing/tools/systems.mjs --out=boxing/tools/out",
-    "boxing:shot": "vite build && node boxing/tools/shot.mjs"
+    "boxing:shot": "vite build && node boxing/tools/shot.mjs",
+    "pv:smoke": "vite build && node polevault/tools/smoke.mjs",
+    "pv:shot": "vite build && node polevault/tools/shot.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"
