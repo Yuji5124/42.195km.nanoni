@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 //   trampoline/index.html … トランポリン、なのに。
 //   soccer/index.html … サッカー、なのに。
 //   boxing/index.html … ボクシング、なのに。
+//   polevault/index.html … 棒高跳び、なのに。
 //   nanoni-generator/index.html … 「なのに。」発想ジェネレーター
 export default defineConfig({
   base: './',
@@ -21,6 +22,7 @@ export default defineConfig({
         tramp: resolve(import.meta.dirname, 'trampoline/index.html'),
         soccer: resolve(import.meta.dirname, 'soccer/index.html'),
         boxing: resolve(import.meta.dirname, 'boxing/index.html'),
+        polevault: resolve(import.meta.dirname, 'polevault/index.html'),
         nanoniGenerator: resolve(import.meta.dirname, 'nanoni-generator/index.html'),
       },
     },

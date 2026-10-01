@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#05060f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>棒高跳び、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&family=DotGothic16&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body data-phase="boot">
+    <canvas id="game"></canvas>
+
+    <div id="ui">
+      <!-- ===== カメラのファインダー（カメラマンが見ている画面の印） ===== -->
+      <div id="vf" class="vf hidden">
+        <div class="vf-safe"><i></i><i></i><i></i><i></i></div>
+        <div class="vf-cross"></div>
+        <div id="lockBox" class="vf-lock hidden"><i></i><i></i><i></i><i></i><span id="lockLabel">LOCK</span></div>
+        <div id="hints" class="vf-hints"></div>
+        <div class="vf-zoom">
+          <span>W</span>
+          <div class="vf-zbar"><i id="zoomFill"></i></div>
+          <span>T</span>
+          <b id="zoomVal">1.6x</b>
+        </div>
+        <div class="vf-focus"><span id="focusMode">AF</span><b id="focusVal">30.0m</b><i id="focusBar"></i></div>
+        <div id="tally" class="vf-tally">STANDBY</div>
+        <div id="timecode" class="vf-tc">00:00:00:00</div>
+        <div id="shotCount" class="vf-shots">SHOT 0</div>
+      </div>
+
+      <!-- ===== 中継の画面（視聴率・Cheers・出来高） ===== -->
+      <div id="hud" class="hud hidden">
+        <div class="h-live">
+          <b>● LIVE</b>
+          <span>NANONI SPORTS · NIGHT GAMES</span>
+          <small id="hClock">0:00 / 3:00</small>
+        </div>
+        <div class="h-stats">
+          <div class="h-view">
+            <small>VIEWERSHIP</small>
+            <div><b id="vVal">12.4</b><i>%</i><em id="vTrend"></em></div>
+            <canvas id="vGraph" width="200" height="40"></canvas>
+          </div>
+          <div class="h-row"><small>CAMERA SCORE</small><b id="scoreVal">0</b></div>
+          <div class="h-row"><small>CHEERS</small><b id="cheersVal">0</b></div>
+          <div class="h-row"><small>PAY</small><b id="payVal">¥0</b></div>
+        </div>
+        <div id="lower" class="lower hidden">
+          <div class="l-name"><b id="lName">-</b><span id="lNat"></span></div>
+          <div class="l-info"><span id="lHeight"></span><span id="lMarks"></span></div>
+        </div>
+        <div id="spike" class="spike">VIEWERSHIP SPIKE</div>
+        <div id="pops" class="pops"></div>
+      </div>
+
+      <!-- ===== AI CAMERA JUDGE ===== -->
+      <div id="judge" class="judge hidden">
+        <div class="j-head">AI CAMERA JUDGE <small id="jMode"></small></div>
+        <div class="j-thumb"><canvas id="jThumb" width="256" height="144"></canvas></div>
+        <ul id="jLines" class="j-lines"></ul>
+        <div class="j-score"><small>SCORE</small><b id="jScore">--</b></div>
+        <div id="jPts" class="j-pts"></div>
+      </div>
+
+      <div id="subs" class="subs"></div>
+      <div id="mono" class="mono"></div>
+      <div id="cue" class="cue"></div>
+      <div id="fade" class="fade"></div>
+
+      <!-- ===== タイトル ===== -->
+      <div id="intro" class="screen intro">
+        <div class="intro-wrap">
+          <div class="i-live">● ON AIR 19:58 · MEN’S POLE VAULT FINAL · 30,000</div>
+          <h1><span>棒高跳び、</span><span class="b">なのに。</span></h1>
+          <p class="i-lead">視聴率が、あなたの記録になる。</p>
+          <p class="i-sub">あなたは選手ではない。<b>出来高制のテレビカメラマン</b>。<br />3 分間、3 万人の中から「映す価値」を探す。</p>
+          <ol class="i-how">
+            <li><b>マウス</b> カメラを振る ・ <b>ホイール</b> ズーム ・ <b>SHIFT</b> 高速パン</li>
+            <li><b>左クリック</b> 対象をロック ・ <b>右クリック</b> ピント ・ <b>R</b> 一瞬広角</li>
+            <li><b>SPACE</b> SHOT（AI CAMERA JUDGE が採点する）</li>
+          </ol>
+          <div class="i-start blink">CLICK / SPACE でオンエア</div>
+          <div class="i-note">約 3 分 + エピローグ ・ ゲームパッド / タッチ対応 ・ M で音</div>
+        </div>
+        <button id="back" class="back-btn hidden" type="button">← タイトルへ</button>
+      </div>
+
+      <!-- ===== エピローグ ===== -->
+      <div id="epi" class="epi hidden">
+        <div class="e-vtr hidden" id="eVtr"><img id="eImg" alt="" /><span id="eStamp">YOUR SHOT</span></div>
+        <div id="eText" class="e-text"></div>
+        <div class="e-skip">SPACE / CLICK ▸▸</div>
+      </div>
+
+      <div id="result" class="screen result hidden"></div>
+
+      <div id="pause" class="screen pause hidden">
+        <div>PAUSE<small>クリック / P / ESC で再開</small></div>
+        <button type="button" class="back-btn p-back hidden" data-action="back">← タイトルへ</button>
+      </div>
+
+      <!-- タッチ用（PC では出さない） -->
+      <div id="pad" class="pad hidden">
+        <div class="pad-l">
+          <button type="button" data-btn="wide">WIDE</button>
+          <button type="button" data-btn="zin">＋</button>
+          <button type="button" data-btn="zout">－</button>
+        </div>
+        <div class="pad-r">
+          <button type="button" data-btn="focus">AF</button>
+          <button type="button" data-btn="lock">LOCK</button>
+          <button type="button" data-btn="shot" class="shot">SHOT</button>
+        </div>
+      </div>
+
+      <button id="muteBtn" class="mute-btn" type="button" aria-label="mute">♪</button>
+      <div id="dev" class="dev hidden"></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
