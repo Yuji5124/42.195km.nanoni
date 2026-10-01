@@ -225,9 +225,13 @@ export class NightSky {
     }
     this.moonCover = this.cloudAlphaAt(this.moonAz, this.moonEl);
     const vis = 1 - this.moonCover * 0.85;
-    this.moon.material.color.setRGB(2.6 * vis + 0.25, 2.5 * vis + 0.25, 2.3 * vis + 0.3);
-    this.halo.material.opacity = 0.35 + 0.65 * vis;
-    const hs = 2 * R * 0.92 * Math.tan(this.moonSize * (2.8 + 2.4 * vis));
+    // 望遠で月に寄ると露出が下がる（模様が見える）・ハロは小さく薄く
+    const fov = camera?.fov ?? 46;
+    const tele = Math.min(1, Math.max(0, (fov - 2) / 14));
+    const ex = 0.55 + 0.45 * tele;
+    this.moon.material.color.setRGB((2.6 * vis + 0.25) * ex, (2.5 * vis + 0.25) * ex, (2.3 * vis + 0.3) * ex);
+    this.halo.material.opacity = (0.35 + 0.65 * vis) * (0.25 + 0.75 * tele);
+    const hs = 2 * R * 0.92 * Math.tan(this.moonSize * (1.6 + (1.2 + 2.4 * vis) * tele));
     this.halo.scale.setScalar(hs);
     this.domeU.uMoonLight.value = 0.3 + 0.7 * vis;
     // 雲の色: 月の近くは明るく縁取られる / 下側は照明の暖色

@@ -262,8 +262,9 @@ export class StadiumBuilder {
     this.add(roof);
     // 選手のバッグ・ポールのケース
     for (let k = 0; k < 5; k++) {
-      const bag = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.3), new THREE.MeshLambertMaterial({ color: [0xc3122f, 0x1d4fb8, 0x222222, 0xffd23f, 0x2f8f4f][k] }));
-      bag.position.set(BENCH.x - 3 + k * 1.4, 0.15, BENCH.z + 0.6);
+      const bag = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.42, 4, 10), new THREE.MeshLambertMaterial({ color: [0x8a1424, 0x1d3f8a, 0x222222, 0x6a5a20, 0x1f5f3a][k] }));
+      bag.rotation.z = Math.PI / 2;
+      bag.position.set(BENCH.x - 3 + k * 1.4, 0.13, BENCH.z + 0.7);
       this.add(bag);
     }
     // 試技時計（残り時間の表示）

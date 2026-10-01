@@ -418,7 +418,7 @@ export class ShotJudge {
     }
     if (moonOk) ai += 16;
     if (moonOk && !athletes.length && !npcs.length) {
-      ai += 14;
+      ai += 19;
       lines.push('VERY BEAUTIFUL');
     }
     if (bird) ai += 10;

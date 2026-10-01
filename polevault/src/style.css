@@ -1038,10 +1038,19 @@ body.touch .vf-zoom,
 body.touch .vf-focus,
 body.touch .vf-tc,
 body.touch .vf-shots {
-  bottom: calc(var(--safe-b) + 118px);
+  bottom: calc(var(--safe-b) + 112px);
 }
 body.touch .subs {
-  bottom: calc(var(--safe-b) + 140px);
+  bottom: calc(var(--safe-b) + 136px);
+}
+body.touch .mute-btn {
+  right: auto;
+  left: var(--safe-l);
+  top: calc(var(--safe-t) + 40px);
+  bottom: auto;
+}
+body.touch .lower {
+  bottom: calc(var(--safe-b) + 186px);
 }
 
 /* ---------------- 開発用 ---------------- */
@@ -1071,8 +1080,16 @@ body.touch .subs {
   .mono { font-size: 15px; max-width: 70vw; top: 38%; }
   .lower { min-width: 220px; bottom: calc(var(--safe-b) + 150px); }
   .r-records, .r-grid { grid-template-columns: 1fr; }
-  .vf-zbar { width: 90px; }
-  .vf-tally { top: calc(var(--safe-t) + 128px); }
+  .vf-zbar { width: 70px; }
+  .vf-zoom { gap: 5px; }
+  .vf-zoom span { display: none; }
+  .vf-shots { display: none; }
+  .vf-tc { font-size: 10px; }
+  .vf-focus { gap: 4px; font-size: 11px; }
+  .vf-tally { top: auto; right: auto; left: calc(var(--safe-l) + 44px); top: calc(var(--safe-t) + 44px); font-size: 10px; }
+  .pad button { width: 48px; height: 48px; font-size: 11px; }
+  .pad button.shot { width: 66px; height: 66px; font-size: 13px; }
+  .pad div { gap: 6px; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
   .intro h1 { font-size: clamp(30px, 11vh, 60px); }
