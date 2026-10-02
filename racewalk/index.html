@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#07070d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>競歩、なのに。</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,700;1,700&family=Dela+Gothic+One&family=DotGothic16&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body data-phase="boot">
+    <div id="app" class="app">
+      <!-- ===== 左: ACTION / REACTION（配信者の誘惑） ===== -->
+      <aside id="left" class="pane left">
+        <header class="p-head">
+          <span class="p-title">ACTION <small>/ REACTION</small></span>
+          <span id="ctxLabel" class="ctx">通常</span>
+        </header>
+        <div id="actions" class="actions"></div>
+        <div class="p-foot">
+          <div class="keys"><kbd>1</kbd>〜<kbd>6</kbd> ACTION　押さなくてもいい</div>
+          <div class="keys"><kbd>↑</kbd><kbd>↓</kbd> ペース　<kbd>←</kbd><kbd>→</kbd> 横　<kbd>SPACE</kbd> 立て直す・給水　<kbd>C</kbd> カメラ</div>
+        </div>
+      </aside>
+
+      <!-- ===== 中央: 3D 競歩（配信の映像） ===== -->
+      <main id="center" class="pane center">
+        <canvas id="game"></canvas>
+        <div id="hud" class="hud">
+          <div class="h-top">
+            <div class="h-live"><b class="live">● LIVE</b><span id="hViewers" class="viewers">20,312</span><small>人が視聴中</small><span id="hElapsed" class="elapsed">41:22</span></div>
+            <div id="hRace" class="h-race">
+              <div class="r1"><span>10000m 競歩 決勝</span><b id="hLap">LAP 21/25</b></div>
+              <div class="r2"><b id="hRank" class="rank">4<small>位</small></b><span id="hGap">先頭 +1.2秒</span></div>
+              <div class="r3"><span id="hRem">残り 2,000m</span><span id="hClock">31:46.2</span></div>
+            </div>
+          </div>
+          <div id="hStrip" class="h-strip"></div>
+          <div id="hCards" class="h-cards"></div>
+          <div id="hToasts" class="h-toasts"></div>
+          <div id="hBig" class="h-big"></div>
+          <div id="hQte" class="h-qte hidden"><b>SPACE</b><span>立て直せ！</span><i></i></div>
+          <div id="hPrompt" class="h-prompt"></div>
+          <div id="hSub" class="h-sub"></div>
+          <div class="h-pace">
+            <div class="pc-label">PACE <b id="hPaceName">集団</b></div>
+            <div id="hPace" class="pc-bar"><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="pc-cam">CAM <b id="hCam">顔</b> <kbd>C</kbd></div>
+          </div>
+          <div class="h-bottom">
+            <div class="h-avatar">歩</div>
+            <div class="h-title">
+              <b>【決勝】10000m競歩しながら配信【全然疲れてない】</b>
+              <span>アユムの全然疲れてないch ・ 登録者 <em id="hSubs">15.0万</em>人</span>
+            </div>
+            <div class="h-likes"><span>👍 <em id="hLikes">3,120</em></span><span>👎 <em id="hDis">41</em></span></div>
+          </div>
+          <div id="hFlame" class="h-flame"></div>
+        </div>
+        <!-- タッチ -->
+        <div id="pad" class="pad hidden">
+          <div class="pad-l">
+            <button data-btn="left">◀</button>
+            <button data-btn="right">▶</button>
+          </div>
+          <div class="pad-r">
+            <button data-btn="up">▲</button>
+            <button data-btn="down">▼</button>
+            <button data-btn="space" class="sp">SPACE</button>
+            <button data-btn="cam" class="cam">CAM</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- ===== 右: LIVE CHAT（勝手に騒ぐインターネット） ===== -->
+      <aside id="right" class="pane right">
+        <header class="p-head">
+          <span class="p-title">LIVE CHAT <small>上位のチャット ▾</small></span>
+          <span id="chatRate" class="rate">0.0/秒</span>
+        </header>
+        <div id="pins" class="pins"></div>
+        <div id="spot" class="spot"></div>
+        <div id="chat" class="chat"></div>
+        <div class="c-foot"><span class="c-input">チャット…（配信者はあなたです）</span></div>
+      </aside>
+    </div>
+
+    <!-- ===== 導入 ===== -->
+    <div id="intro" class="screen intro">
+      <div class="intro-wrap">
+        <div class="i-live">● LIVE 41:22 · MEN’S 10000m RACE WALK FINAL · 登録者 15.0万人</div>
+        <h1><span>競歩、</span><span class="b">なのに。</span></h1>
+        <p class="i-lead">ちゃんと歩けば勝てる。でも、ふざけた方が配信は伸びる。</p>
+        <p class="i-sub">あなたは登録者 15 万人の<b>競歩配信者</b>・アユム。<br />決勝の真っ最中も、ずっと生配信している。残りは 5 周。</p>
+        <ol class="i-how">
+          <li><b>↑↓</b> ペース ・ <b>←→</b> 横（追い越し・給水）・ <b>SPACE</b> つまずいたら立て直す / 給水</li>
+          <li><b>1〜6 / クリック</b> 左の ACTION（押さなくてもいい）・ <b>C</b> カメラ（顔 ⇔ 背中）</li>
+          <li>疲れはゲージに出ない。<b>コメント欄</b>が教えてくれる（たぶん）</li>
+        </ol>
+        <div class="i-start blink">CLICK / SPACE で配信に戻る</div>
+        <div class="i-note">約 7 分 ・ 視聴者 約 230 人ぶんの人格 ・ タッチ / ゲームパッド対応 ・ M で音</div>
+      </div>
+      <button id="back" class="back-btn" type="button">← タイトルへ</button>
+    </div>
+
+    <div id="endcard" class="screen endcard hidden"><div><b>ご視聴ありがとうございました</b><small>配信は終了しました</small></div></div>
+    <div id="result" class="screen result hidden"></div>
+    <div id="pause" class="screen pause hidden">
+      <div>PAUSE<small>クリック / P / ESC で再開</small></div>
+      <button type="button" class="back-btn p-back" data-action="back">← タイトルへ</button>
+    </div>
+    <button id="muteBtn" class="mute-btn" type="button" title="音 ON/OFF（M）">♪</button>
+    <div id="rotate" class="rotate hidden">横向きでも遊べます</div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

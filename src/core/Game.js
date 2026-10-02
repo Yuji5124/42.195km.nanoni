@@ -33,6 +33,11 @@ const EXTERNAL = {
     title: ['棒高跳び、', 'なのに。'],
     note: '視聴率が、あなたの記録になる。<br />出来高制のテレビカメラマンとして、3 分間・3 万人の中から「映す価値」を探す。SPACE / TAP で棒高跳びのページへ移動します。',
   },
+  racewalk: {
+    url: './racewalk/index.html#from-main',
+    title: ['競歩、', 'なのに。'],
+    note: 'ちゃんと歩けば勝てる。でも、ふざけた方が配信は伸びる。<br />登録者 15 万人の競歩配信者として、決勝を生配信しながら歩く。SPACE / TAP で競歩のページへ移動します。',
+  },
 };
 import { DistanceManager } from '../race/DistanceManager.js';
 import { RaceManager, RACE } from '../race/RaceManager.js';

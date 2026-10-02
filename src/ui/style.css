@@ -699,36 +699,46 @@ body {
   gap: 14px;
   margin: 0 auto 18px;
   flex-wrap: wrap;
-  max-width: 1060px; /* 7 枚を 3 + 3 + 1（PC の広い画面は 4 + 3）に */
+  max-width: 1060px; /* 8 枚を 3 + 3 + 2（PC の広い画面は 4 + 4）に */
 }
-/* PC: 同じ幅の 3 列（6 枚 = 3 + 3）。カードの文字の長さで並びが崩れないように */
+/* PC: 同じ幅の 3 列（6 列の格子に 2 列ずつ）。カードの文字の長さで並びが崩れないように */
 @media (min-width: 900px) and (min-height: 521px) {
   .mode-select {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     width: min(96vw, 1060px);
   }
   .mode-card {
     min-width: 0;
+    grid-column: span 2;
+  }
+  .mode-card b {
+    font-size: clamp(17px, 2.2vw, 24px);
+    white-space: nowrap;
   }
   .mode-card small {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* 7 枚目（3 列の時は最後の行の真ん中） */
+  /* 最後の行が 2 枚 / 1 枚の時は真ん中へ */
+  .mode-card:nth-child(3n + 1):nth-last-child(2) {
+    grid-column: 2 / span 2;
+  }
   .mode-card:last-child:nth-child(3n + 1) {
-    grid-column: 2;
+    grid-column: 3 / span 2;
   }
 }
-/* 広い PC: 4 + 3（2 行で収める）。最後の 3 枚は真ん中寄せ */
+/* 広い PC: 4 + 4（2 行で収める）。7 枚の時は最後の 3 枚を真ん中寄せ */
 @media (min-width: 1240px) and (min-height: 521px) {
   .mode-select {
     grid-template-columns: repeat(8, minmax(0, 1fr));
     width: min(96vw, 1320px);
     max-width: 1320px;
   }
-  .mode-card {
+  .mode-card,
+  .mode-card:nth-child(3n + 1):nth-last-child(2),
+  .mode-card:last-child:nth-child(3n + 1) {
     grid-column: span 2;
     padding: 10px 14px 8px;
   }
@@ -736,11 +746,8 @@ body {
     font-size: clamp(16px, 1.38vw, 22px);
     white-space: nowrap;
   }
-  .mode-card:nth-child(5) {
+  .mode-card:nth-child(5):nth-last-child(3) {
     grid-column: 2 / span 2;
-  }
-  .mode-card:last-child:nth-child(3n + 1) {
-    grid-column: span 2;
   }
 }
 .mode-card {
@@ -782,6 +789,125 @@ body {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.12em;
+}
+/* 競歩、なのに。のカード: 競歩 × 生配信だと「少しだけ」わかる（歩く人・流れるコメント・LIVE） */
+.rw-card .new {
+  z-index: 2;
+}
+.rw-card b,
+.rw-card small {
+  position: relative;
+  z-index: 1;
+}
+.rw-live {
+  position: absolute;
+  top: 3px;
+  left: 8px;
+  font-family: 'Chakra Petch', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff;
+  opacity: 0.9;
+}
+.rw-live i {
+  font-style: normal;
+  color: #ff2a3c;
+  margin-right: 2px;
+  animation: rwBlink 1.2s steps(2) infinite;
+}
+.rw-live em {
+  font-style: normal;
+  margin-left: 3px;
+  color: #ffd23f;
+}
+.rw-walker {
+  position: absolute;
+  left: 6px;
+  bottom: 2px;
+  width: 26px;
+  height: 31px;
+  opacity: 0.55;
+}
+.rw-walker svg {
+  width: 100%;
+  height: 100%;
+  fill: #39e6ff;
+  stroke: #39e6ff;
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  animation: rwWalk 0.5s ease-in-out infinite alternate;
+  transform-origin: 50% 100%;
+}
+.rw-walker circle {
+  stroke: none;
+}
+.rw-walker path {
+  fill: none;
+}
+.rw-chat {
+  position: absolute;
+  top: 3px;
+  right: 8px;
+  bottom: 42%;
+  width: 60px;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 30%, #000 75%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 30%, #000 75%, transparent);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.rw-roll {
+  display: flex;
+  flex-direction: column;
+  animation: rwRoll 4.8s linear infinite;
+}
+.rw-roll i {
+  font-style: normal;
+  font-size: 9px;
+  line-height: 13px;
+  white-space: nowrap;
+  text-align: left;
+  color: #dfe6ff;
+}
+.rw-roll i.sc {
+  color: #fff;
+  background: #c2185b;
+  border-radius: 2px;
+  padding: 0 3px;
+  align-self: flex-start;
+}
+.mode-card.selected .rw-chat,
+.mode-card.selected .rw-walker,
+.rw-card:hover .rw-chat,
+.rw-card:hover .rw-walker {
+  opacity: 0.9;
+}
+@keyframes rwRoll {
+  to {
+    transform: translateY(-78px);
+  }
+}
+@keyframes rwWalk {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(4deg) translateX(1px);
+  }
+}
+@keyframes rwBlink {
+  50% {
+    opacity: 0.3;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rw-roll,
+  .rw-walker svg,
+  .rw-live i {
+    animation: none;
+  }
 }
 .result-body .to-title {
   display: block;
@@ -1221,7 +1347,7 @@ body[data-mode='TV_BROADCAST'] .hud-bottom {
   .controls { display: none; }
   .note { margin-top: 8px; font-size: 11px; line-height: 1.5; }
 }
-/* 縦画面のスマホ: カード 6 枚 + 見出し + スタートを 1 画面に入れる（キーボードの説明は出さない） */
+/* 縦画面のスマホ: カード 8 枚 + 見出し + スタートを 1 画面に入れる（キーボードの説明は出さない） */
 @media (max-width: 640px) and (orientation: portrait) {
   .mode-select { gap: 8px; margin-bottom: 14px; }
   .mode-card { padding: 7px 14px 6px; }
@@ -1229,7 +1355,7 @@ body[data-mode='TV_BROADCAST'] .hud-bottom {
   .mode-card small { font-size: 11.5px; margin-top: 2px; white-space: nowrap; letter-spacing: 0.02em; }
   .controls { display: none; }
 }
-/* 小さい縦画面（iPhone SE など）: カードを薄くする（7 枚） */
+/* 小さい縦画面（iPhone SE など）: カードを薄くする（8 枚） */
 @media (max-width: 640px) and (max-height: 740px) {
   .title-screen h1 { font-size: clamp(32px, 10vw, 60px); }
   .tagline { margin: 4px 0 10px; font-size: 14px; }
